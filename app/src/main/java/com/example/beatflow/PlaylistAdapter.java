@@ -3,17 +3,20 @@ package com.example.beatflow;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-import com.example.beatflow.R;
+import com.example.beatflow.Data.Playlist;
 import java.util.List;
 
 public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.PlaylistViewHolder> {
-    private List<String> playlists;
+    private List<Playlist> playlists;
+    private OnPlaylistClickListener listener;
 
-    public PlaylistAdapter(List<String> playlists) {
+    public PlaylistAdapter(List<Playlist> playlists, OnPlaylistClickListener listener) {
         this.playlists = playlists;
+        this.listener = listener;
     }
 
     @NonNull
@@ -25,7 +28,8 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
 
     @Override
     public void onBindViewHolder(@NonNull PlaylistViewHolder holder, int position) {
-        holder.playlistName.setText(playlists.get(position));
+        Playlist playlist = playlists.get(position);
+        holder.bind(playlist, listener);
     }
 
     @Override
@@ -33,12 +37,32 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
         return playlists.size();
     }
 
-    static class PlaylistViewHolder extends RecyclerView.ViewHolder {
-        TextView playlistName;
+    public void setPlaylists(List<Playlist> playlists) {
+        this.playlists = playlists;
+        notifyDataSetChanged();
+    }
 
-        PlaylistViewHolder(View itemView) {
+    static class PlaylistViewHolder extends RecyclerView.ViewHolder {
+        private ImageView playlistImage;
+        private TextView playlistName;
+
+        PlaylistViewHolder(@NonNull View itemView) {
             super(itemView);
+            playlistImage = itemView.findViewById(R.id.playlistImage);
             playlistName = itemView.findViewById(R.id.playlistName);
         }
+
+        void bind(final Playlist playlist, final OnPlaylistClickListener listener) {
+            playlistName.setText(playlist.getName());
+            itemView.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onPlaylistClick(playlist);
+                }
+            });
+        }
+    }
+
+    public interface OnPlaylistClickListener {
+        void onPlaylistClick(Playlist playlist);
     }
 }

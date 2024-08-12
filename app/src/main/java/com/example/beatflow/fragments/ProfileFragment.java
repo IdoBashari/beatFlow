@@ -1,138 +1,295 @@
 package com.example.beatflow.fragments;
 
-import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.ImageView;
-import android.widget.TextView;
+import android.widget.EditText;
 import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.GridLayoutManager;
+import com.bumptech.glide.Glide;
 import com.example.beatflow.MainActivity;
+import com.example.beatflow.PlaylistAdapter;
 import com.example.beatflow.R;
+import com.example.beatflow.Data.Playlist;
+import com.example.beatflow.Data.User;
+import com.example.beatflow.databinding.FragmentProfileBinding;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
+import java.util.ArrayList;
+import java.util.UUID;
 
 public class ProfileFragment extends Fragment {
-    private static final String TAG = "ProfileFragment";
-    private FirebaseAuth mAuth;
-    private FirebaseFirestore db;
-    private FirebaseUser currentUser;
+    private FragmentProfileBinding binding;
+    private FirebaseAuth firebaseAuth;
+    private FirebaseFirestore firestore;
     private FirebaseStorage storage;
     private StorageReference storageRef;
-    private ImageView profileImage;
-    private TextView userName;
-    private TextView userDescription;
-    private Button changeProfileImageButton;
-    private ActivityResultLauncher<String> mGetContent;
+    private PlaylistAdapter playlistAdapter;
+    private User currentUser;
+    private ActivityResultLauncher<String> imagePickerLauncher;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mAuth = FirebaseAuth.getInstance();
-        db = FirebaseFirestore.getInstance();
-        currentUser = mAuth.getCurrentUser();
-        storage = FirebaseStorage.getInstance();
-        storageRef = storage.getReference();
-
-        mGetContent = registerForActivityResult(new ActivityResultContracts.GetContent(),
-                result -> {
-                    if (result != null) {
-                        uploadImageToFirebase(result);
-                    } else {
-                        Log.e(TAG, "No image selected");
-                        Toast.makeText(getContext(), "No image selected", Toast.LENGTH_SHORT).show();
-                    }
-                });
-
-        checkPermissions();
+        imagePickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                this::uploadProfileImage
+        );
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.fragment_profile, container, false);
-        profileImage = view.findViewById(R.id.profileImage);
-        userName = view.findViewById(R.id.userName);
-        userDescription = view.findViewById(R.id.userDescription);
-        changeProfileImageButton = view.findViewById(R.id.changeProfileImageButton);
-        changeProfileImageButton.setOnClickListener(v -> mGetContent.launch("image/*"));
-        Button logoutButton = view.findViewById(R.id.logout_button);
-        logoutButton.setOnClickListener(v -> logout());
-        if (currentUser != null) {
-            userName.setText(currentUser.getDisplayName() != null ? currentUser.getDisplayName() : "Guest");
-        }
-        return view;
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        binding = FragmentProfileBinding.inflate(inflater, container, false);
+        return binding.getRoot();
     }
 
-    private void logout() {
-        FirebaseAuth.getInstance().signOut();
-        ((MainActivity) getActivity()).loadFragment(new LoginFragment());
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        initFirebase();
+        setupUserInfo();
+        setupButtons();
+        setupPlaylistRecyclerView();
+        loadPlaylists();
     }
 
-    private void uploadImageToFirebase(Uri imageUri) {
-        if (imageUri == null) {
-            Toast.makeText(getContext(), "Image URI is null", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (currentUser == null) {
-            Log.e(TAG, "User not authenticated");
-            Toast.makeText(getContext(), "User not authenticated", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        StorageReference imageRef = storageRef.child("profile_images/" + currentUser.getUid() + ".jpg");
-        imageRef.putFile(imageUri)
-                .addOnSuccessListener(taskSnapshot -> imageRef.getDownloadUrl().addOnSuccessListener(uri -> {
-                    String imageUrl = uri.toString();
-                    updateProfileImageUrl(imageUrl);
-                }))
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Failed to upload image", e);
-                    Toast.makeText(getContext(), "Failed to upload image", Toast.LENGTH_SHORT).show();
-                });
+    private void initFirebase() {
+        firebaseAuth = FirebaseAuth.getInstance();
+        firestore = FirebaseFirestore.getInstance();
+        storage = FirebaseStorage.getInstance();
+        storageRef = storage.getReference();
     }
 
-    private void updateProfileImageUrl(String imageUrl) {
-        if (currentUser != null) {
-            db.collection("users").document(currentUser.getUid())
-                    .update("imageUrl", imageUrl)
-                    .addOnSuccessListener(aVoid -> Log.d(TAG, "Profile image URL updated successfully"))
+    private void setupUserInfo() {
+        FirebaseUser firebaseUser = firebaseAuth.getCurrentUser();
+        if (firebaseUser != null) {
+            String userId = firebaseUser.getUid();
+            firestore.collection("users").document(userId).get()
+                    .addOnSuccessListener(documentSnapshot -> {
+                        currentUser = documentSnapshot.toObject(User.class);
+                        if (currentUser != null) {
+                            binding.userName.setText(currentUser.getName());
+                            binding.userDescription.setText(currentUser.getDescription());
+                            if (currentUser.getProfileImageUrl() != null && !currentUser.getProfileImageUrl().isEmpty()) {
+                                Glide.with(this)
+                                        .load(currentUser.getProfileImageUrl())
+                                        .placeholder(R.drawable.ic_person)
+                                        .into(binding.profileImage);
+                            }
+                        } else {
+                            Toast.makeText(getContext(), "Failed to load user data", Toast.LENGTH_SHORT).show();
+                        }
+                    })
                     .addOnFailureListener(e -> {
-                        Log.e(TAG, "Failed to update profile image URL", e);
-                        Toast.makeText(getContext(), "Failed to update profile image", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), "Failed to load user data: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Log.e("ProfileFragment", "Error loading user data", e);
                     });
         }
     }
 
-    private void checkPermissions() {
-        if (ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.READ_EXTERNAL_STORAGE)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(getActivity(),
-                    new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE},
-                    1);
+    private void setupButtons() {
+        binding.changeProfileImageButton.setOnClickListener(v -> openImageChooser());
+        binding.createPlaylistButton.setOnClickListener(v -> showCreatePlaylistDialog());
+        binding.logoutButton.setOnClickListener(v -> logout());
+        binding.fab.setOnClickListener(v -> showEditProfileDialog());
+    }
+
+    private void openImageChooser() {
+        imagePickerLauncher.launch("image/*");
+    }
+
+    private void uploadProfileImage(Uri imageUri) {
+        if (imageUri != null && firebaseAuth.getCurrentUser() != null) {
+            String userId = firebaseAuth.getCurrentUser().getUid();
+            StorageReference imageRef = storageRef.child("profile_images/" + userId + ".jpg");
+
+            imageRef.putFile(imageUri)
+                    .addOnSuccessListener(taskSnapshot -> imageRef.getDownloadUrl()
+                            .addOnSuccessListener(uri -> updateUserProfileImage(uri.toString())))
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(getContext(), getString(R.string.error_uploading_image) + ": " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Log.e("ProfileFragment", "Error uploading image", e);
+                    });
+        }
+    }
+
+    private void updateUserProfileImage(String imageUrl) {
+        if (firebaseAuth.getCurrentUser() != null) {
+            String userId = firebaseAuth.getCurrentUser().getUid();
+            firestore.collection("users").document(userId)
+                    .update("profileImageUrl", imageUrl)
+                    .addOnSuccessListener(aVoid -> {
+                        Toast.makeText(getContext(), getString(R.string.profile_image_updated), Toast.LENGTH_SHORT).show();
+                        Glide.with(this)
+                                .load(imageUrl)
+                                .placeholder(R.drawable.ic_person)
+                                .into(binding.profileImage);
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(getContext(), getString(R.string.error_updating_profile_image) + ": " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Log.e("ProfileFragment", "Error updating profile image", e);
+                    });
+        }
+    }
+
+    private void setupPlaylistRecyclerView() {
+        playlistAdapter = new PlaylistAdapter(new ArrayList<>(), this::onPlaylistClick);
+        binding.playlistsRecyclerView.setLayoutManager(new GridLayoutManager(getContext(), 2));
+        binding.playlistsRecyclerView.setAdapter(playlistAdapter);
+    }
+
+    private void loadPlaylists() {
+        if (firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(getContext(), "User not logged in", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String userId = firebaseAuth.getCurrentUser().getUid();
+        firestore.collection("users").document(userId)
+                .collection("playlists")
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    ArrayList<Playlist> playlists = new ArrayList<>();
+                    for (QueryDocumentSnapshot document : queryDocumentSnapshots) {
+                        Playlist playlist = document.toObject(Playlist.class);
+                        if (playlist != null) {
+                            playlists.add(playlist);
+                        }
+                    }
+                    playlistAdapter.setPlaylists(playlists);
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(getContext(), getString(R.string.error_loading_playlists) + ": " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    Log.e("ProfileFragment", "Error loading playlists", e);
+                });
+    }
+
+    private void onPlaylistClick(Playlist playlist) {
+        if (getActivity() instanceof MainActivity) {
+            PlaylistDetailFragment playlistDetailFragment = PlaylistDetailFragment.newInstance(playlist.getId());
+            ((MainActivity) getActivity()).loadFragment(playlistDetailFragment);
+        }
+    }
+
+    private void showCreatePlaylistDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        builder.setTitle(R.string.create_new_playlist);
+
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_create_playlist, null);
+        final EditText nameInput = dialogView.findViewById(R.id.playlist_name_input);
+        final EditText descriptionInput = dialogView.findViewById(R.id.playlist_description_input);
+
+        builder.setView(dialogView);
+
+        builder.setPositiveButton(R.string.create, (dialog, which) -> {
+            String playlistName = nameInput.getText().toString();
+            String playlistDescription = descriptionInput.getText().toString();
+            if (!playlistName.isEmpty()) {
+                createPlaylist(playlistName, playlistDescription);
+            } else {
+                Toast.makeText(getContext(), "Playlist name cannot be empty", Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton(R.string.cancel, (dialog, which) -> dialog.cancel());
+
+        builder.show();
+    }
+
+    private void createPlaylist(String playlistName, String playlistDescription) {
+        if (firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(getContext(), "User not logged in", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String userId = firebaseAuth.getCurrentUser().getUid();
+        String playlistId = UUID.randomUUID().toString();
+
+        Playlist newPlaylist = new Playlist(playlistId, playlistName, "", playlistDescription);
+
+        firestore.collection("users").document(userId)
+                .collection("playlists").document(playlistId)
+                .set(newPlaylist)
+                .addOnSuccessListener(aVoid -> {
+                    Toast.makeText(getContext(), getString(R.string.playlist_created, playlistName), Toast.LENGTH_SHORT).show();
+                    loadPlaylists();
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(getContext(), getString(R.string.error_creating_playlist) + ": " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    Log.e("ProfileFragment", "Error creating playlist", e);
+                });
+    }
+
+    private void logout() {
+        firebaseAuth.signOut();
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).loadFragment(new LoginFragment());
+        }
+    }
+
+    private void showEditProfileDialog() {
+        if (currentUser == null) {
+            Toast.makeText(getContext(), "User data not loaded yet. Please try again.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        builder.setTitle(R.string.edit_profile);
+
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_edit_profile, null);
+        final EditText nameInput = dialogView.findViewById(R.id.profile_name_input);
+        final EditText descriptionInput = dialogView.findViewById(R.id.profile_description_input);
+
+        nameInput.setText(currentUser.getName());
+        descriptionInput.setText(currentUser.getDescription());
+
+        builder.setView(dialogView);
+
+        builder.setPositiveButton(R.string.save, (dialog, which) -> {
+            String newName = nameInput.getText().toString();
+            String newDescription = descriptionInput.getText().toString();
+            updateUserProfile(newName, newDescription);
+        });
+        builder.setNegativeButton(R.string.cancel, (dialog, which) -> dialog.cancel());
+
+        builder.show();
+    }
+
+    private void updateUserProfile(String newName, String newDescription) {
+        if (firebaseAuth.getCurrentUser() != null) {
+            String userId = firebaseAuth.getCurrentUser().getUid();
+            firestore.collection("users").document(userId)
+                    .update("name", newName, "description", newDescription)
+                    .addOnSuccessListener(aVoid -> {
+                        Toast.makeText(getContext(), getString(R.string.profile_updated), Toast.LENGTH_SHORT).show();
+                        currentUser.setName(newName);
+                        currentUser.setDescription(newDescription);
+                        binding.userName.setText(newName);
+                        binding.userDescription.setText(newDescription);
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(getContext(), getString(R.string.error_updating_profile) + ": " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Log.e("ProfileFragment", "Error updating profile", e);
+                    });
         }
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 1) {
-            if (grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                Log.d(TAG, "Permission granted to read external storage");
-            } else {
-                Toast.makeText(getContext(), "Permission denied to read your External storage", Toast.LENGTH_SHORT).show();
-            }
-        }
+    public void onDestroyView() {
+        super.onDestroyView();
+        binding = null;
     }
 }

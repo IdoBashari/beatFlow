@@ -27,10 +27,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
+    buildFeatures {
+        viewBinding = true
+    }
 }
 
 dependencies {
-
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)
@@ -43,7 +45,11 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
 
-    implementation (libs.firebase.ui.auth)
+    implementation(libs.firebase.ui.auth)
     implementation(libs.firebase.database)
     implementation(libs.firebase.storage)
+
+    //mm not
+    implementation (libs.glide)
+    annotationProcessor (libs.compiler)
 }

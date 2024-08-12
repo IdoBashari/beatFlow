@@ -3,10 +3,9 @@ package com.example.beatflow;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import android.os.Bundle;
-import android.util.Log;
-
 import com.example.beatflow.fragments.LoginFragment;
 import com.example.beatflow.fragments.ProfileFragment;
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 
 public class MainActivity extends AppCompatActivity {
@@ -16,6 +15,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        FirebaseApp.initializeApp(this);
         mAuth = FirebaseAuth.getInstance();
 
         if (savedInstanceState == null) {
@@ -30,17 +31,13 @@ public class MainActivity extends AppCompatActivity {
         } else {
             initialFragment = new LoginFragment();
         }
-        getSupportFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, initialFragment)
-                .commit();
+        loadFragment(initialFragment);
     }
 
     public void loadFragment(Fragment fragment) {
-        long startTime = System.currentTimeMillis();
         getSupportFragmentManager().beginTransaction()
                 .replace(R.id.fragment_container, fragment)
+                .addToBackStack(null)
                 .commit();
-        long endTime = System.currentTimeMillis();
-        Log.d("MainActivity", "Load Fragment time: " + (endTime - startTime) + "ms");
     }
 }

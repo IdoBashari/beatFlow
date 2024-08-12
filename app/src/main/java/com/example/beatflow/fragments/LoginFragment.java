@@ -5,13 +5,14 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import com.example.beatflow.MainActivity;
 import com.example.beatflow.R;
+import com.example.beatflow.databinding.FragmentLoginBinding;
 import com.firebase.ui.auth.AuthUI;
 import com.firebase.ui.auth.FirebaseAuthUIActivityResultContract;
 import com.firebase.ui.auth.data.model.FirebaseAuthUIAuthenticationResult;
@@ -19,16 +20,14 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import java.util.Arrays;
 import java.util.List;
-import static android.app.Activity.RESULT_OK;
 
 public class LoginFragment extends Fragment {
-    private FirebaseAuth mAuth;
+    private FragmentLoginBinding binding;
     private ActivityResultLauncher<Intent> signInLauncher;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mAuth = FirebaseAuth.getInstance();
         signInLauncher = registerForActivityResult(
                 new FirebaseAuthUIActivityResultContract(),
                 this::onSignInResult
@@ -36,11 +35,15 @@ public class LoginFragment extends Fragment {
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.fragment_login, container, false);
-        Button loginButton = view.findViewById(R.id.login_button);
-        loginButton.setOnClickListener(v -> signIn());
-        return view;
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        binding = FragmentLoginBinding.inflate(inflater, container, false);
+        return binding.getRoot();
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        binding.loginButton.setOnClickListener(v -> signIn());
     }
 
     private void signIn() {
@@ -58,11 +61,25 @@ public class LoginFragment extends Fragment {
     }
 
     private void onSignInResult(FirebaseAuthUIAuthenticationResult result) {
-        if (result.getResultCode() == RESULT_OK) {
+        if (result.getResultCode() == -1) {
             FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-            ((MainActivity) requireActivity()).loadFragment(new ProfileFragment());
+            if (user != null) {
+                navigateToProfileScreen();
+            }
         } else {
             Toast.makeText(requireContext(), "Sign in failed", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void navigateToProfileScreen() {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).loadFragment(new ProfileFragment());
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        binding = null;
     }
 }
