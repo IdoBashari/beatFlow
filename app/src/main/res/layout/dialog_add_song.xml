@@ -6,15 +6,20 @@
     android:padding="16dp">
 
     <EditText
-        android:id="@+id/edit_name"
+        android:id="@+id/song_name_input"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Name"/>
+        android:hint="Song Name"
+        android:inputType="text"
+        android:maxLines="1"/>
 
     <EditText
-        android:id="@+id/edit_description"
+        android:id="@+id/artist_name_input"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Description"/>
+        android:hint="Artist Name"
+        android:inputType="text"
+        android:maxLines="1"
+        android:layout_marginTop="8dp"/>
 
 </LinearLayout>

@@ -3,20 +3,19 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="16dp">
-
-    <ImageView
-        android:id="@+id/playlistImage"
-        android:layout_width="match_parent"
-        android:layout_height="150dp"
-        android:scaleType="centerCrop"
-        android:contentDescription="@string/playlist_image" />
+    android:padding="8dp">
 
     <TextView
-        android:id="@+id/playlistName"
+        android:id="@+id/song_name"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textSize="16sp"
-        android:layout_marginTop="8dp" />
+        android:textStyle="bold"/>
+
+    <TextView
+        android:id="@+id/artist_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"/>
 
 </LinearLayout>

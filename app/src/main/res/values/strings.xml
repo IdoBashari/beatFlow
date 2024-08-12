@@ -23,5 +23,9 @@
     <string name="profile_updated">Profile updated successfully</string>
     <string name="error_updating_profile">Error updating profile</string>
     <string name="save">Save</string>
+    <string name="no_playlists">No Playlists</string>
+    <string name="playlist_image">Description of the playlist image</string>
+    <string name="song_hint">Song Name</string>
+    <string name="artist_hint">Artist Name</string>
 
 </resources>

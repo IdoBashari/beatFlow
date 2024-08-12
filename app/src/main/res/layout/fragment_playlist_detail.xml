@@ -18,6 +18,18 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"/>
 
-    <!-- Add more views as needed for your playlist detail screen -->
+    <Button
+        android:id="@+id/addSongButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Add Song"
+        android:layout_marginTop="16dp"/>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/songsRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="16dp"/>
 
 </LinearLayout>

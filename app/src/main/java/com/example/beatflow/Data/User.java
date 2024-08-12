@@ -7,7 +7,8 @@ public class User {
     private String description;
     private String profileImageUrl;
 
-    public User() {}
+    public User() {
+    }
 
     public User(String id, String name, String email, String description, String profileImageUrl) {
         this.id = id;

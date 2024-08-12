@@ -1,25 +1,29 @@
 package com.example.beatflow.Data;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class Playlist {
     private String id;
     private String name;
-    private String imageUrl;
     private String description;
-    private List<String> songIds;
+    private int songCount;
+    private String imageUrl;
 
     public Playlist() {
-        // Empty constructor required for Firestore
     }
 
-    public Playlist(String id, String name, String imageUrl, String description) {
+    public Playlist(String id, String name, String description, int songCount, String imageUrl) {
         this.id = id;
         this.name = name;
-        this.imageUrl = imageUrl;
         this.description = description;
-        this.songIds = new ArrayList<>();
+        this.songCount = songCount;
+        this.imageUrl = imageUrl;
+    }
+
+    public Playlist(String id, String name, String description, int songCount) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+        this.songCount = songCount;
+        this.imageUrl = null;
     }
 
     public String getId() {
@@ -38,14 +42,6 @@ public class Playlist {
         this.name = name;
     }
 
-    public String getImageUrl() {
-        return imageUrl;
-    }
-
-    public void setImageUrl(String imageUrl) {
-        this.imageUrl = imageUrl;
-    }
-
     public String getDescription() {
         return description;
     }
@@ -54,28 +50,19 @@ public class Playlist {
         this.description = description;
     }
 
-    public List<String> getSongIds() {
-        return songIds;
-    }
-
-    public void setSongIds(List<String> songIds) {
-        this.songIds = songIds;
-    }
-
-    public void addSong(String songId) {
-        if (this.songIds == null) {
-            this.songIds = new ArrayList<>();
-        }
-        this.songIds.add(songId);
-    }
-
-    public void removeSong(String songId) {
-        if (this.songIds != null) {
-            this.songIds.remove(songId);
-        }
-    }
-
     public int getSongCount() {
-        return songIds != null ? songIds.size() : 0;
+        return songCount;
+    }
+
+    public void setSongCount(int songCount) {
+        this.songCount = songCount;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
     }
 }

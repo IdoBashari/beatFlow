@@ -2,7 +2,6 @@ package com.example.beatflow.fragments;
 
 import android.net.Uri;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,17 +23,21 @@ import com.example.beatflow.Data.User;
 import com.example.beatflow.databinding.FragmentProfileBinding;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.QueryDocumentSnapshot;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
+
 import java.util.ArrayList;
 import java.util.UUID;
 
 public class ProfileFragment extends Fragment {
     private FragmentProfileBinding binding;
     private FirebaseAuth firebaseAuth;
-    private FirebaseFirestore firestore;
+    private DatabaseReference databaseReference;
     private FirebaseStorage storage;
     private StorageReference storageRef;
     private PlaylistAdapter playlistAdapter;
@@ -53,14 +56,13 @@ public class ProfileFragment extends Fragment {
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         binding = FragmentProfileBinding.inflate(inflater, container, false);
+        initFirebase();
         return binding.getRoot();
     }
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-
-        initFirebase();
         setupUserInfo();
         setupButtons();
         setupPlaylistRecyclerView();
@@ -69,35 +71,43 @@ public class ProfileFragment extends Fragment {
 
     private void initFirebase() {
         firebaseAuth = FirebaseAuth.getInstance();
-        firestore = FirebaseFirestore.getInstance();
+        databaseReference = FirebaseDatabase.getInstance().getReference();
         storage = FirebaseStorage.getInstance();
         storageRef = storage.getReference();
     }
 
     private void setupUserInfo() {
-        FirebaseUser firebaseUser = firebaseAuth.getCurrentUser();
-        if (firebaseUser != null) {
-            String userId = firebaseUser.getUid();
-            firestore.collection("users").document(userId).get()
-                    .addOnSuccessListener(documentSnapshot -> {
-                        currentUser = documentSnapshot.toObject(User.class);
-                        if (currentUser != null) {
-                            binding.userName.setText(currentUser.getName());
-                            binding.userDescription.setText(currentUser.getDescription());
-                            if (currentUser.getProfileImageUrl() != null && !currentUser.getProfileImageUrl().isEmpty()) {
-                                Glide.with(this)
-                                        .load(currentUser.getProfileImageUrl())
-                                        .placeholder(R.drawable.ic_person)
-                                        .into(binding.profileImage);
-                            }
-                        } else {
-                            Toast.makeText(getContext(), "Failed to load user data", Toast.LENGTH_SHORT).show();
-                        }
-                    })
-                    .addOnFailureListener(e -> {
-                        Toast.makeText(getContext(), "Failed to load user data: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        Log.e("ProfileFragment", "Error loading user data", e);
-                    });
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user != null) {
+            String uid = user.getUid();
+            databaseReference.child("users").child(uid).addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    currentUser = dataSnapshot.getValue(User.class);
+                    if (currentUser != null) {
+                        binding.userName.setText(currentUser.getName());
+                        binding.userDescription.setText(currentUser.getDescription());
+                        loadProfileImage(currentUser.getProfileImageUrl());
+                    }
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+                    Toast.makeText(requireContext(), "Failed to load user data.", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+    }
+
+    private void loadProfileImage(String imageUrl) {
+        if (imageUrl != null && !imageUrl.isEmpty()) {
+            Glide.with(this)
+                    .load(imageUrl)
+                    .placeholder(R.drawable.ic_person)
+                    .error(R.drawable.error_profile_image)
+                    .into(binding.profileImage);
+        } else {
+            binding.profileImage.setImageResource(R.drawable.ic_person);
         }
     }
 
@@ -105,7 +115,7 @@ public class ProfileFragment extends Fragment {
         binding.changeProfileImageButton.setOnClickListener(v -> openImageChooser());
         binding.createPlaylistButton.setOnClickListener(v -> showCreatePlaylistDialog());
         binding.logoutButton.setOnClickListener(v -> logout());
-        binding.fab.setOnClickListener(v -> showEditProfileDialog());
+        binding.editProfileButton.setOnClickListener(v -> showEditProfileDialog());
     }
 
     private void openImageChooser() {
@@ -114,176 +124,147 @@ public class ProfileFragment extends Fragment {
 
     private void uploadProfileImage(Uri imageUri) {
         if (imageUri != null && firebaseAuth.getCurrentUser() != null) {
-            String userId = firebaseAuth.getCurrentUser().getUid();
-            StorageReference imageRef = storageRef.child("profile_images/" + userId + ".jpg");
-
-            imageRef.putFile(imageUri)
-                    .addOnSuccessListener(taskSnapshot -> imageRef.getDownloadUrl()
-                            .addOnSuccessListener(uri -> updateUserProfileImage(uri.toString())))
-                    .addOnFailureListener(e -> {
-                        Toast.makeText(getContext(), getString(R.string.error_uploading_image) + ": " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        Log.e("ProfileFragment", "Error uploading image", e);
-                    });
-        }
-    }
-
-    private void updateUserProfileImage(String imageUrl) {
-        if (firebaseAuth.getCurrentUser() != null) {
-            String userId = firebaseAuth.getCurrentUser().getUid();
-            firestore.collection("users").document(userId)
-                    .update("profileImageUrl", imageUrl)
-                    .addOnSuccessListener(aVoid -> {
-                        Toast.makeText(getContext(), getString(R.string.profile_image_updated), Toast.LENGTH_SHORT).show();
-                        Glide.with(this)
-                                .load(imageUrl)
-                                .placeholder(R.drawable.ic_person)
-                                .into(binding.profileImage);
-                    })
-                    .addOnFailureListener(e -> {
-                        Toast.makeText(getContext(), getString(R.string.error_updating_profile_image) + ": " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        Log.e("ProfileFragment", "Error updating profile image", e);
-                    });
+            StorageReference fileRef = storageRef.child("users/" + firebaseAuth.getCurrentUser().getUid() + "/profile.jpg");
+            fileRef.putFile(imageUri).addOnSuccessListener(taskSnapshot -> fileRef.getDownloadUrl().addOnSuccessListener(uri -> {
+                String imageUrl = uri.toString();
+                databaseReference.child("users").child(firebaseAuth.getCurrentUser().getUid()).child("profileImageUrl").setValue(imageUrl);
+                loadProfileImage(imageUrl);
+            })).addOnFailureListener(e -> Toast.makeText(requireContext(), "Failed to upload image.", Toast.LENGTH_SHORT).show());
         }
     }
 
     private void setupPlaylistRecyclerView() {
-        playlistAdapter = new PlaylistAdapter(new ArrayList<>(), this::onPlaylistClick);
-        binding.playlistsRecyclerView.setLayoutManager(new GridLayoutManager(getContext(), 2));
+        playlistAdapter = new PlaylistAdapter(new ArrayList<>(), this::handlePlaylistSelection);
+        binding.playlistsRecyclerView.setLayoutManager(new GridLayoutManager(requireContext(), 2));
         binding.playlistsRecyclerView.setAdapter(playlistAdapter);
+        playlistAdapter.setOnPlaylistLongClickListener(this::showDeletePlaylistDialog);
     }
 
     private void loadPlaylists() {
-        if (firebaseAuth.getCurrentUser() == null) {
-            Toast.makeText(getContext(), "User not logged in", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        String userId = firebaseAuth.getCurrentUser().getUid();
-        firestore.collection("users").document(userId)
-                .collection("playlists")
-                .get()
-                .addOnSuccessListener(queryDocumentSnapshots -> {
+        binding.playlistsProgressBar.setVisibility(View.VISIBLE);
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user != null) {
+            databaseReference.child("users").child(user.getUid()).child("playlists").addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                     ArrayList<Playlist> playlists = new ArrayList<>();
-                    for (QueryDocumentSnapshot document : queryDocumentSnapshots) {
-                        Playlist playlist = document.toObject(Playlist.class);
+                    for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
+                        Playlist playlist = snapshot.getValue(Playlist.class);
                         if (playlist != null) {
                             playlists.add(playlist);
                         }
                     }
                     playlistAdapter.setPlaylists(playlists);
-                })
-                .addOnFailureListener(e -> {
-                    Toast.makeText(getContext(), getString(R.string.error_loading_playlists) + ": " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    Log.e("ProfileFragment", "Error loading playlists", e);
-                });
+                    binding.playlistsProgressBar.setVisibility(View.GONE);
+                    binding.noPlaylistsText.setVisibility(playlists.isEmpty() ? View.VISIBLE : View.GONE);
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+                    binding.playlistsProgressBar.setVisibility(View.GONE);
+                    Toast.makeText(requireContext(), "Failed to load playlists: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
     }
 
-    private void onPlaylistClick(Playlist playlist) {
-        if (getActivity() instanceof MainActivity) {
-            PlaylistDetailFragment playlistDetailFragment = PlaylistDetailFragment.newInstance(playlist.getId());
-            ((MainActivity) getActivity()).loadFragment(playlistDetailFragment);
+    private void handlePlaylistSelection(Playlist playlist) {
+        PlaylistDetailFragment detailFragment = PlaylistDetailFragment.newInstance(playlist.getId());
+        ((MainActivity) requireActivity()).loadFragment(detailFragment);
+    }
+
+    private boolean showDeletePlaylistDialog(Playlist playlist) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Delete Playlist")
+                .setMessage("Are you sure you want to delete this playlist?")
+                .setPositiveButton("Yes", (dialog, which) -> deletePlaylist(playlist))
+                .setNegativeButton("No", null)
+                .show();
+        return true;
+    }
+
+    private void deletePlaylist(Playlist playlist) {
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user != null) {
+            databaseReference.child("users").child(user.getUid())
+                    .child("playlists").child(playlist.getId()).removeValue()
+                    .addOnSuccessListener(aVoid -> {
+                        Toast.makeText(requireContext(), "Playlist deleted successfully", Toast.LENGTH_SHORT).show();
+                        loadPlaylists();
+                    })
+                    .addOnFailureListener(e -> Toast.makeText(requireContext(), "Failed to delete playlist", Toast.LENGTH_SHORT).show());
         }
     }
 
     private void showCreatePlaylistDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
-        builder.setTitle(R.string.create_new_playlist);
-
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_create_playlist, null);
-        final EditText nameInput = dialogView.findViewById(R.id.playlist_name_input);
-        final EditText descriptionInput = dialogView.findViewById(R.id.playlist_description_input);
+        EditText nameInput = dialogView.findViewById(R.id.playlist_name_input);
+        EditText descriptionInput = dialogView.findViewById(R.id.playlist_description_input);
 
-        builder.setView(dialogView);
-
-        builder.setPositiveButton(R.string.create, (dialog, which) -> {
-            String playlistName = nameInput.getText().toString();
-            String playlistDescription = descriptionInput.getText().toString();
-            if (!playlistName.isEmpty()) {
-                createPlaylist(playlistName, playlistDescription);
-            } else {
-                Toast.makeText(getContext(), "Playlist name cannot be empty", Toast.LENGTH_SHORT).show();
-            }
-        });
-        builder.setNegativeButton(R.string.cancel, (dialog, which) -> dialog.cancel());
-
-        builder.show();
+        builder.setView(dialogView)
+                .setPositiveButton("Create", (dialog, id) -> {
+                    String name = nameInput.getText().toString();
+                    String description = descriptionInput.getText().toString();
+                    createPlaylist(name, description);
+                })
+                .setNegativeButton("Cancel", null);
+        builder.create().show();
     }
 
-    private void createPlaylist(String playlistName, String playlistDescription) {
-        if (firebaseAuth.getCurrentUser() == null) {
-            Toast.makeText(getContext(), "User not logged in", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        String userId = firebaseAuth.getCurrentUser().getUid();
+    private void createPlaylist(String name, String description) {
         String playlistId = UUID.randomUUID().toString();
-
-        Playlist newPlaylist = new Playlist(playlistId, playlistName, "", playlistDescription);
-
-        firestore.collection("users").document(userId)
-                .collection("playlists").document(playlistId)
-                .set(newPlaylist)
-                .addOnSuccessListener(aVoid -> {
-                    Toast.makeText(getContext(), getString(R.string.playlist_created, playlistName), Toast.LENGTH_SHORT).show();
-                    loadPlaylists();
-                })
-                .addOnFailureListener(e -> {
-                    Toast.makeText(getContext(), getString(R.string.error_creating_playlist) + ": " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    Log.e("ProfileFragment", "Error creating playlist", e);
-                });
+        Playlist newPlaylist = new Playlist(playlistId, name, description, 0);
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user != null) {
+            databaseReference.child("users").child(user.getUid())
+                    .child("playlists").child(playlistId).setValue(newPlaylist)
+                    .addOnSuccessListener(aVoid -> {
+                        Toast.makeText(requireContext(), "Playlist created successfully", Toast.LENGTH_SHORT).show();
+                        loadPlaylists();
+                    })
+                    .addOnFailureListener(e -> Toast.makeText(requireContext(), "Failed to create playlist", Toast.LENGTH_SHORT).show());
+        }
     }
 
     private void logout() {
         firebaseAuth.signOut();
-        if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).loadFragment(new LoginFragment());
+        if (getActivity() != null) {
+            getActivity().finish();
         }
     }
 
     private void showEditProfileDialog() {
-        if (currentUser == null) {
-            Toast.makeText(getContext(), "User data not loaded yet. Please try again.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
-        builder.setTitle(R.string.edit_profile);
-
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_edit_profile, null);
-        final EditText nameInput = dialogView.findViewById(R.id.profile_name_input);
-        final EditText descriptionInput = dialogView.findViewById(R.id.profile_description_input);
+        EditText nameEdit = dialogView.findViewById(R.id.edit_name);
+        EditText descriptionEdit = dialogView.findViewById(R.id.edit_description);
 
-        nameInput.setText(currentUser.getName());
-        descriptionInput.setText(currentUser.getDescription());
+        nameEdit.setText(currentUser.getName());
+        descriptionEdit.setText(currentUser.getDescription());
 
-        builder.setView(dialogView);
-
-        builder.setPositiveButton(R.string.save, (dialog, which) -> {
-            String newName = nameInput.getText().toString();
-            String newDescription = descriptionInput.getText().toString();
-            updateUserProfile(newName, newDescription);
-        });
-        builder.setNegativeButton(R.string.cancel, (dialog, which) -> dialog.cancel());
-
-        builder.show();
+        builder.setView(dialogView)
+                .setPositiveButton("Save", (dialog, id) -> {
+                    String newName = nameEdit.getText().toString();
+                    String newDescription = descriptionEdit.getText().toString();
+                    updateUserProfile(newName, newDescription);
+                })
+                .setNegativeButton("Cancel", null);
+        builder.create().show();
     }
 
-    private void updateUserProfile(String newName, String newDescription) {
-        if (firebaseAuth.getCurrentUser() != null) {
-            String userId = firebaseAuth.getCurrentUser().getUid();
-            firestore.collection("users").document(userId)
-                    .update("name", newName, "description", newDescription)
+    private void updateUserProfile(String name, String description) {
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user != null) {
+            DatabaseReference userRef = databaseReference.child("users").child(user.getUid());
+            userRef.child("name").setValue(name);
+            userRef.child("description").setValue(description)
                     .addOnSuccessListener(aVoid -> {
-                        Toast.makeText(getContext(), getString(R.string.profile_updated), Toast.LENGTH_SHORT).show();
-                        currentUser.setName(newName);
-                        currentUser.setDescription(newDescription);
-                        binding.userName.setText(newName);
-                        binding.userDescription.setText(newDescription);
+                        binding.userName.setText(name);
+                        binding.userDescription.setText(description);
+                        Toast.makeText(requireContext(), "Profile updated successfully", Toast.LENGTH_SHORT).show();
                     })
-                    .addOnFailureListener(e -> {
-                        Toast.makeText(getContext(), getString(R.string.error_updating_profile) + ": " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        Log.e("ProfileFragment", "Error updating profile", e);
-                    });
+                    .addOnFailureListener(e -> Toast.makeText(requireContext(), "Failed to update profile", Toast.LENGTH_SHORT).show());
         }
     }
 
