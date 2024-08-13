@@ -12,6 +12,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.Toast;
+
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
@@ -19,6 +20,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
+
 import com.bumptech.glide.Glide;
 import com.example.beatflow.MainActivity;
 import com.example.beatflow.PlaylistAdapter;
@@ -37,10 +39,8 @@ import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
 import java.util.ArrayList;
-import java.util.UUID;
 
 public class ProfileFragment extends Fragment {
-    private static final String TAG = "ProfileFragment";
     private FragmentProfileBinding binding;
     private FirebaseAuth firebaseAuth;
     private DatabaseReference databaseReference;
@@ -54,7 +54,6 @@ public class ProfileFragment extends Fragment {
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
             if (isGranted) {
                 launchImagePicker();
@@ -85,9 +84,9 @@ public class ProfileFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         setupUserInfo();
-        setupButtons();
         setupPlaylistRecyclerView();
         loadPlaylists();
+        setupEditProfileButton();
     }
 
     private void initFirebase() {
@@ -132,11 +131,24 @@ public class ProfileFragment extends Fragment {
         }
     }
 
-    private void setupButtons() {
-        binding.changeProfileImageButton.setOnClickListener(v -> openImageChooser());
-        binding.createPlaylistButton.setOnClickListener(v -> showCreatePlaylistDialog());
-        binding.logoutButton.setOnClickListener(v -> logout());
-        binding.editProfileButton.setOnClickListener(v -> showEditProfileDialog());
+    private void setupEditProfileButton() {
+        binding.fab.setOnClickListener(v -> showEditOptionsDialog());
+    }
+
+    private void showEditOptionsDialog() {
+        CharSequence options[] = new CharSequence[]{"Change Profile Image", "Edit Profile", "Logout"};
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+        builder.setTitle("Choose option");
+        builder.setItems(options, (dialog, which) -> {
+            if (which == 0) {
+                openImageChooser();
+            } else if (which == 1) {
+                showEditProfileDialog();
+            } else if (which == 2) {
+                performLogout();
+            }
+        });
+        builder.show();
     }
 
     private void openImageChooser() {
@@ -172,125 +184,6 @@ public class ProfileFragment extends Fragment {
                 binding.profileImageProgressBar.setVisibility(View.GONE);
                 Toast.makeText(requireContext(), "Failed to upload image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             });
-        }
-    }
-
-    private void setupPlaylistRecyclerView() {
-        playlistAdapter = new PlaylistAdapter(new ArrayList<>(), this::handlePlaylistSelection);
-        binding.playlistsRecyclerView.setLayoutManager(new GridLayoutManager(requireContext(), 2));
-        binding.playlistsRecyclerView.setAdapter(playlistAdapter);
-        playlistAdapter.setOnPlaylistLongClickListener(this::showDeletePlaylistDialog);
-    }
-
-    private void loadPlaylists() {
-        binding.playlistsProgressBar.setVisibility(View.VISIBLE);
-        FirebaseUser user = firebaseAuth.getCurrentUser();
-        if (user != null) {
-            databaseReference.child("users").child(user.getUid()).child("playlists").addListenerForSingleValueEvent(new ValueEventListener() {
-                @Override
-                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                    ArrayList<Playlist> playlists = new ArrayList<>();
-                    for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
-                        Playlist playlist = snapshot.getValue(Playlist.class);
-                        if (playlist != null) {
-                            playlist.setId(snapshot.getKey());
-                            playlists.add(playlist);
-                        }
-                    }
-                    playlistAdapter.setPlaylists(playlists);
-                    binding.playlistsProgressBar.setVisibility(View.GONE);
-                    binding.noPlaylistsText.setVisibility(playlists.isEmpty() ? View.VISIBLE : View.GONE);
-                }
-
-                @Override
-                public void onCancelled(@NonNull DatabaseError databaseError) {
-                    binding.playlistsProgressBar.setVisibility(View.GONE);
-                    Toast.makeText(requireContext(), "Failed to load playlists: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
-    }
-
-    private void handlePlaylistSelection(Playlist playlist) {
-        PlaylistDetailFragment detailFragment = PlaylistDetailFragment.newInstance(playlist.getId());
-        ((MainActivity) requireActivity()).loadFragment(detailFragment);
-    }
-
-    private boolean showDeletePlaylistDialog(Playlist playlist) {
-        if (playlist == null || playlist.getId() == null) {
-            Log.e(TAG, "Attempted to show delete dialog for null playlist or playlist with null ID");
-            return false;
-        }
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Delete Playlist")
-                .setMessage("Are you sure you want to delete this playlist?")
-                .setPositiveButton("Yes", (dialog, which) -> deletePlaylist(playlist.getId()))
-                .setNegativeButton("No", null)
-                .show();
-        return true;
-    }
-
-    private void deletePlaylist(String playlistId) {
-        Log.d(TAG, "Attempting to delete playlist with ID: " + playlistId);
-        if (playlistId == null || playlistId.isEmpty()) {
-            Log.e(TAG, "Attempted to delete playlist with null or empty ID");
-            return;
-        }
-        FirebaseUser user = firebaseAuth.getCurrentUser();
-        if (user != null) {
-            DatabaseReference playlistRef = databaseReference.child("users").child(user.getUid()).child("playlists").child(playlistId);
-            playlistRef.removeValue().addOnCompleteListener(task -> {
-                if (task.isSuccessful()) {
-                    Log.d(TAG, "Playlist deleted successfully");
-                    Toast.makeText(requireContext(), "Playlist deleted successfully", Toast.LENGTH_SHORT).show();
-                    loadPlaylists();
-                } else {
-                    Log.e(TAG, "Failed to delete playlist", task.getException());
-                    Toast.makeText(requireContext(), "Failed to delete playlist", Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
-    }
-
-    private void showCreatePlaylistDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_create_playlist, null);
-        EditText nameInput = dialogView.findViewById(R.id.playlist_name_input);
-        EditText descriptionInput = dialogView.findViewById(R.id.playlist_description_input);
-
-        builder.setView(dialogView)
-                .setPositiveButton("Create", (dialog, id) -> {
-                    String name = nameInput.getText().toString().trim();
-                    String description = descriptionInput.getText().toString().trim();
-                    if (name.isEmpty() || description.isEmpty()) {
-                        Toast.makeText(requireContext(), "Name and description cannot be empty.", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    createPlaylist(name, description);
-                })
-                .setNegativeButton("Cancel", null);
-        builder.create().show();
-    }
-
-    private void createPlaylist(String name, String description) {
-        String playlistId = UUID.randomUUID().toString();
-        Playlist newPlaylist = new Playlist(playlistId, name, description, 0);
-        FirebaseUser user = firebaseAuth.getCurrentUser();
-        if (user != null) {
-            databaseReference.child("users").child(user.getUid())
-                    .child("playlists").child(playlistId).setValue(newPlaylist)
-                    .addOnSuccessListener(aVoid -> {
-                        Toast.makeText(requireContext(), "Playlist created successfully", Toast.LENGTH_SHORT).show();
-                        loadPlaylists();
-                    })
-                    .addOnFailureListener(e -> Toast.makeText(requireContext(), "Failed to create playlist", Toast.LENGTH_SHORT).show());
-        }
-    }
-
-    private void logout() {
-        firebaseAuth.signOut();
-        if (getActivity() != null) {
-            getActivity().finish();
         }
     }
 
@@ -335,6 +228,52 @@ public class ProfileFragment extends Fragment {
                     })
                     .addOnFailureListener(e -> Toast.makeText(requireContext(), "Failed to update profile", Toast.LENGTH_SHORT).show());
         }
+    }
+
+    private void performLogout() {
+        firebaseAuth.signOut();
+        startActivity(new Intent(getContext(), MainActivity.class));
+        getActivity().finish();
+    }
+
+    private void setupPlaylistRecyclerView() {
+        playlistAdapter = new PlaylistAdapter(new ArrayList<>(), this::handlePlaylistSelection);
+        binding.playlistsRecyclerView.setLayoutManager(new GridLayoutManager(requireContext(), 2));
+        binding.playlistsRecyclerView.setAdapter(playlistAdapter);
+    }
+
+    private void loadPlaylists() {
+        binding.playlistsProgressBar.setVisibility(View.VISIBLE);
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user != null) {
+            databaseReference.child("users").child(user.getUid()).child("playlists").addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    ArrayList<Playlist> playlists = new ArrayList<>();
+                    for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
+                        Playlist playlist = snapshot.getValue(Playlist.class);
+                        if (playlist != null) {
+                            playlist.setId(snapshot.getKey());
+                            playlists.add(playlist);
+                        }
+                    }
+                    playlistAdapter.setPlaylists(playlists);
+                    binding.playlistsProgressBar.setVisibility(View.GONE);
+                    binding.noPlaylistsText.setVisibility(playlists.isEmpty() ? View.VISIBLE : View.GONE);
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+                    binding.playlistsProgressBar.setVisibility(View.GONE);
+                    Toast.makeText(requireContext(), "Failed to load playlists: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+    }
+
+    private void handlePlaylistSelection(Playlist playlist) {
+        PlaylistDetailFragment detailFragment = PlaylistDetailFragment.newInstance(playlist.getId());
+        ((MainActivity) requireActivity()).loadFragment(detailFragment);
     }
 
     @Override

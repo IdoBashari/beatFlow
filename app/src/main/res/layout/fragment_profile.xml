@@ -24,9 +24,10 @@
 
                 <ImageView
                     android:id="@+id/profileImage"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:scaleType="centerCrop"
+                    android:layout_width="160dp"
+                    android:layout_height="160dp"
+                    android:layout_gravity="center"
+                    android:scaleType="fitCenter"
                     app:layout_collapseMode="parallax"
                     android:contentDescription="@string/profile_image_description" />
 
@@ -76,24 +77,6 @@
                 android:textColor="@color/dark_gray"
                 android:text="@string/user_description_placeholder" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/changeProfileImageButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="@string/change_profile_image"
-                android:textColor="@color/white"
-                app:backgroundTint="@color/primary_purple" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/editProfileButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/edit_profile"
-                android:textColor="@color/white"
-                app:backgroundTint="@color/primary_purple" />
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -134,26 +117,14 @@
                 app:icon="@drawable/ic_add_playlist"
                 app:iconTint="@color/white" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/logoutButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:text="@string/logout"
-                android:textColor="@color/white"
-                app:backgroundTint="@color/dark_gray"
-                android:padding="8dp"
-                android:textSize="12sp"
-                android:layout_gravity="end" />
-
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab"
-        android:layout_width="wrap_content"
+        android:layout_width="100dp"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
+        android:layout_margin="20dp"
         android:src="@drawable/ic_edit"
         app:backgroundTint="@color/primary_purple"
         app:layout_anchor="@id/profileImage"

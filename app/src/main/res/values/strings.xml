@@ -27,5 +27,7 @@
     <string name="playlist_image">Description of the playlist image</string>
     <string name="song_hint">Song Name</string>
     <string name="artist_hint">Artist Name</string>
-
+    <string name="edit_profile_info">Edit Profile Info</string>
+    <string name="name">Name</string>
+    <string name="description">Description</string>
 </resources>

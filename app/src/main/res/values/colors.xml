@@ -5,6 +5,9 @@
     <color name="primary_green">#4CAF50</color>
     <color name="dark_green">#388E3C</color>
     <color name="primary_purple">#673AB7</color>
+    <color name="light_purple">#8159C6</color>
+    <color name="lilgh_purple">#B591F3</color>
+    <color name="veryy_purple">#DCCDF6</color>
     <color name="dark_purple">#512DA8</color>
     <color name="light_gray">#F5F5F5</color>
     <color name="dark_gray">#212121</color>
