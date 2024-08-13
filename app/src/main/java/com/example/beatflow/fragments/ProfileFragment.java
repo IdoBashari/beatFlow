@@ -1,7 +1,12 @@
 package com.example.beatflow.fragments;
 
+import android.Manifest;
+import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -35,6 +40,7 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 public class ProfileFragment extends Fragment {
+    private static final String TAG = "ProfileFragment";
     private FragmentProfileBinding binding;
     private FirebaseAuth firebaseAuth;
     private DatabaseReference databaseReference;
@@ -42,14 +48,29 @@ public class ProfileFragment extends Fragment {
     private StorageReference storageRef;
     private PlaylistAdapter playlistAdapter;
     private User currentUser;
-    private ActivityResultLauncher<String> imagePickerLauncher;
+    private ActivityResultLauncher<String> requestPermissionLauncher;
+    private ActivityResultLauncher<Intent> imagePickerLauncher;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+            if (isGranted) {
+                launchImagePicker();
+            } else {
+                Toast.makeText(requireContext(), "Permission denied. Cannot choose profile image.", Toast.LENGTH_SHORT).show();
+            }
+        });
+
         imagePickerLauncher = registerForActivityResult(
-                new ActivityResultContracts.GetContent(),
-                this::uploadProfileImage
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == android.app.Activity.RESULT_OK && result.getData() != null) {
+                        Uri imageUri = result.getData().getData();
+                        uploadProfileImage(imageUri);
+                    }
+                }
         );
     }
 
@@ -119,17 +140,38 @@ public class ProfileFragment extends Fragment {
     }
 
     private void openImageChooser() {
-        imagePickerLauncher.launch("image/*");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissionLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES);
+        } else {
+            requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
+        }
+    }
+
+    private void launchImagePicker() {
+        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        imagePickerLauncher.launch(intent);
     }
 
     private void uploadProfileImage(Uri imageUri) {
         if (imageUri != null && firebaseAuth.getCurrentUser() != null) {
+            binding.profileImageProgressBar.setVisibility(View.VISIBLE);
             StorageReference fileRef = storageRef.child("users/" + firebaseAuth.getCurrentUser().getUid() + "/profile.jpg");
             fileRef.putFile(imageUri).addOnSuccessListener(taskSnapshot -> fileRef.getDownloadUrl().addOnSuccessListener(uri -> {
                 String imageUrl = uri.toString();
-                databaseReference.child("users").child(firebaseAuth.getCurrentUser().getUid()).child("profileImageUrl").setValue(imageUrl);
-                loadProfileImage(imageUrl);
-            })).addOnFailureListener(e -> Toast.makeText(requireContext(), "Failed to upload image.", Toast.LENGTH_SHORT).show());
+                databaseReference.child("users").child(firebaseAuth.getCurrentUser().getUid()).child("profileImageUrl").setValue(imageUrl)
+                        .addOnSuccessListener(aVoid -> {
+                            loadProfileImage(imageUrl);
+                            binding.profileImageProgressBar.setVisibility(View.GONE);
+                            Toast.makeText(requireContext(), "Profile image updated successfully", Toast.LENGTH_SHORT).show();
+                        })
+                        .addOnFailureListener(e -> {
+                            binding.profileImageProgressBar.setVisibility(View.GONE);
+                            Toast.makeText(requireContext(), "Failed to update profile image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        });
+            })).addOnFailureListener(e -> {
+                binding.profileImageProgressBar.setVisibility(View.GONE);
+                Toast.makeText(requireContext(), "Failed to upload image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            });
         }
     }
 
@@ -151,6 +193,7 @@ public class ProfileFragment extends Fragment {
                     for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
                         Playlist playlist = snapshot.getValue(Playlist.class);
                         if (playlist != null) {
+                            playlist.setId(snapshot.getKey());
                             playlists.add(playlist);
                         }
                     }
@@ -174,25 +217,38 @@ public class ProfileFragment extends Fragment {
     }
 
     private boolean showDeletePlaylistDialog(Playlist playlist) {
+        if (playlist == null || playlist.getId() == null) {
+            Log.e(TAG, "Attempted to show delete dialog for null playlist or playlist with null ID");
+            return false;
+        }
         new AlertDialog.Builder(requireContext())
                 .setTitle("Delete Playlist")
                 .setMessage("Are you sure you want to delete this playlist?")
-                .setPositiveButton("Yes", (dialog, which) -> deletePlaylist(playlist))
+                .setPositiveButton("Yes", (dialog, which) -> deletePlaylist(playlist.getId()))
                 .setNegativeButton("No", null)
                 .show();
         return true;
     }
 
-    private void deletePlaylist(Playlist playlist) {
+    private void deletePlaylist(String playlistId) {
+        Log.d(TAG, "Attempting to delete playlist with ID: " + playlistId);
+        if (playlistId == null || playlistId.isEmpty()) {
+            Log.e(TAG, "Attempted to delete playlist with null or empty ID");
+            return;
+        }
         FirebaseUser user = firebaseAuth.getCurrentUser();
         if (user != null) {
-            databaseReference.child("users").child(user.getUid())
-                    .child("playlists").child(playlist.getId()).removeValue()
-                    .addOnSuccessListener(aVoid -> {
-                        Toast.makeText(requireContext(), "Playlist deleted successfully", Toast.LENGTH_SHORT).show();
-                        loadPlaylists();
-                    })
-                    .addOnFailureListener(e -> Toast.makeText(requireContext(), "Failed to delete playlist", Toast.LENGTH_SHORT).show());
+            DatabaseReference playlistRef = databaseReference.child("users").child(user.getUid()).child("playlists").child(playlistId);
+            playlistRef.removeValue().addOnCompleteListener(task -> {
+                if (task.isSuccessful()) {
+                    Log.d(TAG, "Playlist deleted successfully");
+                    Toast.makeText(requireContext(), "Playlist deleted successfully", Toast.LENGTH_SHORT).show();
+                    loadPlaylists();
+                } else {
+                    Log.e(TAG, "Failed to delete playlist", task.getException());
+                    Toast.makeText(requireContext(), "Failed to delete playlist", Toast.LENGTH_SHORT).show();
+                }
+            });
         }
     }
 
@@ -204,8 +260,12 @@ public class ProfileFragment extends Fragment {
 
         builder.setView(dialogView)
                 .setPositiveButton("Create", (dialog, id) -> {
-                    String name = nameInput.getText().toString();
-                    String description = descriptionInput.getText().toString();
+                    String name = nameInput.getText().toString().trim();
+                    String description = descriptionInput.getText().toString().trim();
+                    if (name.isEmpty() || description.isEmpty()) {
+                        Toast.makeText(requireContext(), "Name and description cannot be empty.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
                     createPlaylist(name, description);
                 })
                 .setNegativeButton("Cancel", null);
@@ -235,6 +295,11 @@ public class ProfileFragment extends Fragment {
     }
 
     private void showEditProfileDialog() {
+        if (currentUser == null) {
+            Toast.makeText(requireContext(), "User data not available.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_edit_profile, null);
         EditText nameEdit = dialogView.findViewById(R.id.edit_name);
@@ -245,8 +310,12 @@ public class ProfileFragment extends Fragment {
 
         builder.setView(dialogView)
                 .setPositiveButton("Save", (dialog, id) -> {
-                    String newName = nameEdit.getText().toString();
-                    String newDescription = descriptionEdit.getText().toString();
+                    String newName = nameEdit.getText().toString().trim();
+                    String newDescription = descriptionEdit.getText().toString().trim();
+                    if (newName.isEmpty() || newDescription.isEmpty()) {
+                        Toast.makeText(requireContext(), "Name and description cannot be empty.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
                     updateUserProfile(newName, newDescription);
                 })
                 .setNegativeButton("Cancel", null);

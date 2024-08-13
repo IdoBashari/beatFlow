@@ -33,7 +33,11 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
     public void onBindViewHolder(@NonNull PlaylistViewHolder holder, int position) {
         if (playlists != null && position < playlists.size()) {
             Playlist playlist = playlists.get(position);
-            holder.bind(playlist, clickListener, longClickListener);
+            if (playlist != null) {
+                holder.bind(playlist, clickListener, longClickListener);
+            } else {
+                Log.e("PlaylistAdapter", "Playlist at position " + position + " is null");
+            }
         } else {
             Log.e("PlaylistAdapter", "Invalid position or playlists is null");
         }

@@ -11,6 +11,9 @@ public class Playlist {
     }
 
     public Playlist(String id, String name, String description, int songCount, String imageUrl) {
+        if (id == null || id.isEmpty()) {
+            throw new IllegalArgumentException("Playlist ID cannot be null or empty");
+        }
         this.id = id;
         this.name = name;
         this.description = description;
@@ -19,6 +22,9 @@ public class Playlist {
     }
 
     public Playlist(String id, String name, String description, int songCount) {
+        if (id == null || id.isEmpty()) {
+            throw new IllegalArgumentException("Playlist ID cannot be null or empty");
+        }
         this.id = id;
         this.name = name;
         this.description = description;
