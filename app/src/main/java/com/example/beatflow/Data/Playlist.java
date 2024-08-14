@@ -1,16 +1,19 @@
 package com.example.beatflow.Data;
 
+import java.util.List;
+
 public class Playlist {
     private String id;
     private String name;
     private String description;
     private int songCount;
     private String imageUrl;
+    private List<Song> songs;
 
     public Playlist() {
     }
 
-    public Playlist(String id, String name, String description, int songCount, String imageUrl) {
+    public Playlist(String id, String name, String description, int songCount, String imageUrl, List<Song> songs) {
         if (id == null || id.isEmpty()) {
             throw new IllegalArgumentException("Playlist ID cannot be null or empty");
         }
@@ -19,17 +22,7 @@ public class Playlist {
         this.description = description;
         this.songCount = songCount;
         this.imageUrl = imageUrl;
-    }
-
-    public Playlist(String id, String name, String description, int songCount) {
-        if (id == null || id.isEmpty()) {
-            throw new IllegalArgumentException("Playlist ID cannot be null or empty");
-        }
-        this.id = id;
-        this.name = name;
-        this.description = description;
-        this.songCount = songCount;
-        this.imageUrl = null;
+        this.songs = songs;
     }
 
     public String getId() {
@@ -70,5 +63,13 @@ public class Playlist {
 
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
+    }
+
+    public List<Song> getSongs() {
+        return songs;
+    }
+
+    public void setSongs(List<Song> songs) {
+        this.songs = songs;
     }
 }
