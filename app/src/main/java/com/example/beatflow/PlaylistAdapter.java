@@ -17,10 +17,16 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
     private final OnPlaylistClickListener clickListener;
     private OnPlaylistLongClickListener longClickListener;
 
-    public PlaylistAdapter(List<Playlist> playlists, OnPlaylistClickListener clickListener) {
+    public PlaylistAdapter(List<Playlist> playlists, OnPlaylistClickListener clickListener, OnPlaylistLongClickListener longClickListener) {
         this.playlists = playlists;
         this.clickListener = clickListener;
+        this.longClickListener = longClickListener;
     }
+    public void removePlaylist(Playlist playlist) {
+        playlists.remove(playlist);
+        notifyDataSetChanged();
+    }
+
 
     @NonNull
     @Override
@@ -64,7 +70,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
         PlaylistViewHolder(@NonNull View itemView) {
             super(itemView);
             playlistImage = itemView.findViewById(R.id.playlistImage);
-            playlistName = itemView.findViewById(R.id.playlistName);
+            playlistName = itemView.findViewById(R.id.playlistNameSmall);
         }
 
         void bind(final Playlist playlist, final OnPlaylistClickListener clickListener, final OnPlaylistLongClickListener longClickListener) {

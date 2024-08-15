@@ -1,6 +1,7 @@
 [versions]
 agp = "8.4.2"
 compiler = "4.12.0"
+firebaseAppcheckSafetynet = "16.1.2"
 firebaseBom = "33.1.2"
 firebaseUiAuth = "8.0.2"
 glide = "4.12.0"
@@ -9,14 +10,16 @@ junitVersion = "1.2.1"
 espressoCore = "3.6.1"
 appcompat = "1.7.0"
 material = "1.12.0"
-activity = "1.9.0"
+activity = "1.9.1"
 constraintlayout = "2.1.4"
 gs = "4.4.2"
-firebaseFirestore = "25.0.0"
+
 
 [libraries]
+
 compiler = { module = "com.github.bumptech.glide:compiler", version.ref = "compiler" }
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
+firebase-appcheck-safetynet = { module = "com.google.firebase:firebase-appcheck-safetynet", version.ref = "firebaseAppcheckSafetynet" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-database = { module = "com.google.firebase:firebase-database" }
 firebase-storage = { module = "com.google.firebase:firebase-storage" }
@@ -29,7 +32,7 @@ appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "a
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
-firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore", version.ref = "firebaseFirestore" }
+
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

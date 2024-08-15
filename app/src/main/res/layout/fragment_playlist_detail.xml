@@ -5,24 +5,43 @@
     android:orientation="vertical"
     android:padding="16dp">
 
+    <ImageView
+        android:id="@+id/playlistImage"
+        android:layout_width="160dp"
+        android:layout_height="160dp"
+        android:layout_gravity="center_horizontal"
+        android:scaleType="centerCrop"
+        android:contentDescription="Playlist Image" />
+
+    <ProgressBar
+        android:id="@+id/loadingProgressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/playlistName"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textSize="24sp"
-        android:textStyle="bold"/>
+        android:textStyle="bold"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="16dp"/>
 
     <TextView
         android:id="@+id/playlistDescription"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"/>
+        android:layout_marginTop="8dp"
+        android:layout_gravity="center_horizontal"/>
 
     <Button
         android:id="@+id/addSongButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Add Song"
+        android:layout_gravity="center_horizontal"
         android:layout_marginTop="16dp"/>
 
     <androidx.recyclerview.widget.RecyclerView

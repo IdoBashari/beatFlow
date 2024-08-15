@@ -1,5 +1,7 @@
 package com.example.beatflow.fragments;
 
+
+
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
@@ -22,6 +24,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 import com.example.beatflow.Data.Song;
@@ -56,6 +59,7 @@ public class ProfileFragment extends Fragment {
     private ActivityResultLauncher<String> requestPermissionLauncher;
     private ActivityResultLauncher<Intent> imagePickerLauncher;
 
+    private static RecyclerView.RecycledViewPool sharedPool = new RecyclerView.RecycledViewPool();
     private Button createPlaylistButton;
 
     @Override
@@ -84,6 +88,7 @@ public class ProfileFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         binding = FragmentProfileBinding.inflate(inflater, container, false);
         initFirebase();
+        binding.playlistsRecyclerView.setRecycledViewPool(sharedPool);
         return binding.getRoot();
     }
 
@@ -321,63 +326,104 @@ public class ProfileFragment extends Fragment {
     }
 
     private void setupPlaylistRecyclerView() {
-        playlistAdapter = new PlaylistAdapter(new ArrayList<>(), this::handlePlaylistSelection);
+        playlistAdapter = new PlaylistAdapter(new ArrayList<>(),
+                this::handlePlaylistSelection,
+                this::handlePlaylistLongClick // הוספת מאזין ללחיצה ארוכה
+        );
         binding.playlistsRecyclerView.setLayoutManager(new GridLayoutManager(requireContext(), 2));
         binding.playlistsRecyclerView.setAdapter(playlistAdapter);
     }
+    private boolean handlePlaylistLongClick(Playlist playlist) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Delete Playlist")
+                .setMessage("Are you sure you want to delete this playlist?")
+                .setPositiveButton("Delete", (dialog, which) -> {
+                    // פעולה למחיקת הפלייליסט
+                    deletePlaylist(playlist);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+
+        return true; // אם הטיפול בלחיצה ארוכה הצליח
+    }
+    private void deletePlaylist(Playlist playlist) {
+        // מחיקת הפלייליסט מהמאגר או הרשימה המקומית
+        // לדוגמה, אם הפלייליסט נשמר במאגר מקומי או Firebase:
+
+        // מחיקת הפלייליסט מהרשימה המקומית ב-Adapter
+        playlistAdapter.removePlaylist(playlist);
+
+
+        databaseReference.child("playlists").child(playlist.getId()).removeValue()
+                .addOnSuccessListener(aVoid -> {
+                    Toast.makeText(requireContext(), "Playlist deleted", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(requireContext(), "Failed to delete playlist", Toast.LENGTH_SHORT).show();
+                });
+    }
+
+
+
+
 
     private void loadPlaylists() {
         binding.playlistsProgressBar.setVisibility(View.VISIBLE);
+        binding.playlistsRecyclerView.setVisibility(View.GONE);
         FirebaseUser user = firebaseAuth.getCurrentUser();
         if (user != null) {
-            new Thread(() -> {
-                databaseReference.child("users").child(user.getUid()).child("playlists").addListenerForSingleValueEvent(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                        ArrayList<Playlist> playlists = new ArrayList<>();
-                        for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
-                            try {
-                                String id = snapshot.getKey();
-                                String name = snapshot.child("name").getValue(String.class);
-                                String description = snapshot.child("description").getValue(String.class);
-                                Integer songCount = snapshot.child("songCount").getValue(Integer.class);
-                                String imageUrl = snapshot.child("imageUrl").getValue(String.class);
+            databaseReference.child("users").child(user.getUid()).child("playlists").addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    ArrayList<Playlist> playlists = new ArrayList<>();
+                    for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
+                        String id = snapshot.getKey();
+                        String name = snapshot.child("name").getValue(String.class);
+                        String description = snapshot.child("description").getValue(String.class);
+                        Long songCountLong = snapshot.child("songCount").getValue(Long.class);
+                        int songCount = songCountLong != null ? songCountLong.intValue() : 0;
+                        String imageUrl = snapshot.child("imageUrl").getValue(String.class);
 
-                                List<Song> songs = new ArrayList<>();
-                                DataSnapshot songsSnapshot = snapshot.child("songs");
-                                if (songsSnapshot.exists()) {
-                                    for (DataSnapshot songSnapshot : songsSnapshot.getChildren()) {
-                                        Song song = songSnapshot.getValue(Song.class);
-                                        if (song != null) {
-                                            songs.add(song);
-                                        }
-                                    }
+                        List<Song> songs = new ArrayList<>();
+                        DataSnapshot songsSnapshot = snapshot.child("songs");
+                        if (songsSnapshot.exists()) {
+                            for (DataSnapshot songSnapshot : songsSnapshot.getChildren()) {
+                                Song song = songSnapshot.getValue(Song.class);
+                                if (song != null) {
+                                    songs.add(song);
                                 }
-
-                                Playlist playlist = new Playlist(id, name, description, songCount, null, new ArrayList<>());
-                                playlists.add(playlist);
-                            } catch (Exception e) {
-                                Log.e("ProfileFragment", "Error parsing playlist: " + e.getMessage());
                             }
                         }
-                        requireActivity().runOnUiThread(() -> {
-                            playlistAdapter.setPlaylists(playlists);
-                            binding.playlistsProgressBar.setVisibility(View.GONE);
-                            binding.noPlaylistsText.setVisibility(playlists.isEmpty() ? View.VISIBLE : View.GONE);
-                        });
-                    }
 
-                    @Override
-                    public void onCancelled(@NonNull DatabaseError databaseError) {
-                        requireActivity().runOnUiThread(() -> {
-                            binding.playlistsProgressBar.setVisibility(View.GONE);
-                            Toast.makeText(requireContext(), "Failed to load playlists: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
-                        });
+                        Playlist playlist = new Playlist(id, name, description, songCount, imageUrl, songs);
+                        playlists.add(playlist);
                     }
-                });
-            }).start();
+                    requireActivity().runOnUiThread(() -> {
+                        playlistAdapter.setPlaylists(playlists);
+                        binding.playlistsProgressBar.setVisibility(View.GONE);
+                        binding.playlistsRecyclerView.setVisibility(View.VISIBLE);
+                        binding.noPlaylistsText.setVisibility(playlists.isEmpty() ? View.VISIBLE : View.GONE);
+                    });
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+                    requireActivity().runOnUiThread(() -> {
+                        binding.playlistsProgressBar.setVisibility(View.GONE);
+                        binding.playlistsRecyclerView.setVisibility(View.GONE);
+                        binding.noPlaylistsText.setVisibility(View.VISIBLE);
+                        binding.noPlaylistsText.setText("Failed to load playlists");
+                        Toast.makeText(requireContext(), "Failed to load playlists: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
+        } else {
+            binding.playlistsProgressBar.setVisibility(View.GONE);
+            binding.noPlaylistsText.setVisibility(View.VISIBLE);
+            binding.noPlaylistsText.setText("User not logged in");
         }
     }
+
 
     private void handlePlaylistSelection(Playlist playlist) {
         PlaylistDetailFragment detailFragment = PlaylistDetailFragment.newInstance(playlist.getId());
