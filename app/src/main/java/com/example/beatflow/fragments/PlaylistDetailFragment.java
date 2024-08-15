@@ -82,7 +82,49 @@ public class PlaylistDetailFragment extends Fragment {
         checkNetworkAndLoadPlaylist();
         binding.addSongButton.setEnabled(false);
         setupAddSongButton();
+
+        // הגדרת מאזין ללחיצה ארוכה על שיר
+        songAdapter.setOnSongLongClickListener(song -> showDeleteSongDialog(song));
     }
+    private void showDeleteSongDialog(Song song) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Delete Song")
+                .setMessage("Are you sure you want to delete this song?")
+                .setPositiveButton("Delete", (dialog, which) -> deleteSongFromPlaylist(song))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+    private void deleteSongFromPlaylist(Song song) {
+        if (playlist == null || playlistId == null) {
+            Toast.makeText(getContext(), "Playlist not loaded", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user == null) {
+            Toast.makeText(getContext(), "User not logged in", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        DatabaseReference songRef = databaseReference
+                .child("users")
+                .child(user.getUid())
+                .child("playlists")
+                .child(playlistId)
+                .child("songs")
+                .child(song.getId());
+
+        songRef.removeValue().addOnSuccessListener(aVoid -> {
+            playlist.getSongs().remove(song);
+            songAdapter.notifyDataSetChanged();
+            Toast.makeText(getContext(), "Song deleted", Toast.LENGTH_SHORT).show();
+        }).addOnFailureListener(e -> {
+            Toast.makeText(getContext(), "Failed to delete song: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        });
+    }
+
+
+
 
 
     private void checkNetworkAndLoadPlaylist() {

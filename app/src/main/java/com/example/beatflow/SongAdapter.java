@@ -12,6 +12,8 @@ import android.util.Log;
 
 public class SongAdapter extends RecyclerView.Adapter<SongAdapter.SongViewHolder> {
     private List<Song> songs;
+    private OnSongLongClickListener longClickListener;
+
 
     public SongAdapter(List<Song> songs) {
         this.songs = songs;
@@ -23,6 +25,15 @@ public class SongAdapter extends RecyclerView.Adapter<SongAdapter.SongViewHolder
         View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_song, parent, false);
         return new SongViewHolder(view);
     }
+    public interface OnSongLongClickListener {
+        void onSongLongClick(Song song);
+    }
+    public void setOnSongLongClickListener(OnSongLongClickListener listener) {
+        this.longClickListener = listener;
+    }
+
+
+
 
 
     @Override
@@ -31,10 +42,19 @@ public class SongAdapter extends RecyclerView.Adapter<SongAdapter.SongViewHolder
             Song song = songs.get(position);
             holder.bind(song, position + 1);
             Log.d("SongAdapter", "Binding song: " + song.getName() + " by " + song.getArtist() + " at position " + position);
+
+            // הוספת מאזין ללחיצה ארוכה על פריט השיר
+            holder.itemView.setOnLongClickListener(v -> {
+                if (longClickListener != null) {
+                    longClickListener.onSongLongClick(song);
+                }
+                return true;
+            });
         } else {
             Log.d("SongAdapter", "No song to bind at position " + position);
         }
     }
+
 
 
     @Override
