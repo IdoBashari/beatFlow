@@ -3,6 +3,7 @@ package com.example.beatflow.fragments;
 
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -15,6 +16,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
@@ -63,23 +65,26 @@ public class ProfileFragment extends Fragment {
     private static RecyclerView.RecycledViewPool sharedPool = new RecyclerView.RecycledViewPool();
     private Button createPlaylistButton;
 
+    private Uri selectedImageUri = null;
+    private AlertDialog currentDialog;
+
+
+
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
-            if (isGranted) {
-                launchImagePicker();
-            } else {
-                Toast.makeText(requireContext(), "Permission denied. Cannot choose profile image.", Toast.LENGTH_SHORT).show();
-            }
-        });
 
         imagePickerLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
-                    if (result.getResultCode() == android.app.Activity.RESULT_OK && result.getData() != null) {
-                        Uri imageUri = result.getData().getData();
-                        uploadProfileImage(imageUri);
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                        selectedPlaylistImageUri = result.getData().getData();
+                        if (currentDialog != null && currentDialog.isShowing()) {
+                            ImageView playlistImagePreview = currentDialog.findViewById(R.id.playlist_image_preview);
+                            if (playlistImagePreview != null) {
+                                playlistImagePreview.setImageURI(selectedPlaylistImageUri);
+                            }
+                        }
                     }
                 }
         );
@@ -176,29 +181,61 @@ public class ProfileFragment extends Fragment {
         binding.fab.setOnClickListener(v -> showEditOptionsDialog());
     }
 
+    private Uri selectedPlaylistImageUri = null;
+
     public void showCreatePlaylistDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_create_playlist, null);
         EditText playlistNameInput = dialogView.findViewById(R.id.playlist_name_input);
         EditText playlistDescriptionInput = dialogView.findViewById(R.id.playlist_description_input);
+        Button selectImageButton = dialogView.findViewById(R.id.select_image_button);
+        ImageView playlistImagePreview = dialogView.findViewById(R.id.playlist_image_preview);
+
+        selectImageButton.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            imagePickerLauncher.launch(intent);
+        });
 
         builder.setView(dialogView)
                 .setPositiveButton("Create", (dialog, id) -> {
                     String playlistName = playlistNameInput.getText().toString();
                     String playlistDescription = playlistDescriptionInput.getText().toString();
-                    createNewPlaylist(playlistName, playlistDescription);
+                    createNewPlaylist(playlistName, playlistDescription, selectedPlaylistImageUri);
                 })
                 .setNegativeButton("Cancel", null);
-        builder.create().show();
+
+        currentDialog = builder.create();
+        currentDialog.show();
     }
 
-    private void createNewPlaylist(String name, String description) {
+    private void createNewPlaylist(String name, String description, Uri imageUri) {
         String playlistId = UUID.randomUUID().toString();
-        Playlist newPlaylist = new Playlist(playlistId, name, description, 0, null, new ArrayList<>());
 
-        if (firebaseAuth.getCurrentUser() != null) {
+        if (imageUri != null) {
+            StorageReference imageRef = storageRef.child("playlists/" + playlistId + ".jpg");
+            imageRef.putFile(imageUri)
+                    .addOnSuccessListener(taskSnapshot -> {
+                        imageRef.getDownloadUrl().addOnSuccessListener(uri -> {
+                            String imageUrl = uri.toString();
+                            savePlaylistToDatabase(playlistId, name, description, imageUrl);
+                        });
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(requireContext(), "Failed to upload image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        savePlaylistToDatabase(playlistId, name, description, null);
+                    });
+        } else {
+            savePlaylistToDatabase(playlistId, name, description, null);
+        }
+    }
+
+    private void savePlaylistToDatabase(String playlistId, String name, String description, String imageUrl) {
+        Playlist newPlaylist = new Playlist(playlistId, name, description, 0, imageUrl, new ArrayList<>());
+
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user != null) {
             DatabaseReference playlistRef = databaseReference.child("users")
-                    .child(firebaseAuth.getCurrentUser().getUid())
+                    .child(user.getUid())
                     .child("playlists")
                     .child(playlistId);
 
