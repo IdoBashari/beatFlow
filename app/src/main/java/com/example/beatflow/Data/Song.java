@@ -3,6 +3,9 @@ package com.example.beatflow.Data;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class Song implements Parcelable {
     private String id;
     private String name;
@@ -70,4 +73,13 @@ public class Song implements Parcelable {
         parcel.writeString(name);
         parcel.writeString(artist);
     }
+
+    public Map<String, Object> toMap() {
+        HashMap<String, Object> result = new HashMap<>();
+        result.put("id", id);
+        result.put("name", name);
+        result.put("artist", artist);
+        return result;
+    }
 }
+

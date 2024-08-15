@@ -37,6 +37,9 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class PlaylistDetailFragment extends Fragment {
     private FragmentPlaylistDetailBinding binding;
     private DatabaseReference databaseReference;
@@ -79,8 +82,8 @@ public class PlaylistDetailFragment extends Fragment {
         checkNetworkAndLoadPlaylist();
         binding.addSongButton.setEnabled(false);
         setupAddSongButton();
-        Log.d("PlaylistDetailFragment", "onViewCreated completed.");
     }
+
 
     private void checkNetworkAndLoadPlaylist() {
         if (isNetworkAvailable()) {
@@ -159,8 +162,8 @@ public class PlaylistDetailFragment extends Fragment {
             return;
         }
 
-        DatabaseReference songsRef = databaseReference.child("users").child(user.getUid()).child("playlists").child(playlistId).child("songs");
-        String songId = songsRef.push().getKey();
+        DatabaseReference playlistRef = databaseReference.child("users").child(user.getUid()).child("playlists").child(playlistId);
+        String songId = playlistRef.child("songs").push().getKey();
         if (songId == null) {
             Log.e("AddSong", "Error: Failed to generate song ID");
             Toast.makeText(getContext(), "Error: Failed to generate song ID", Toast.LENGTH_SHORT).show();
@@ -170,7 +173,11 @@ public class PlaylistDetailFragment extends Fragment {
         Song newSong = new Song(songId, songName, artistName);
         Log.d("AddSong", "Attempting to save song to Firebase: " + newSong.getName());
 
-        songsRef.child(songId).setValue(newSong)
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("songs/" + songId, newSong.toMap());
+        updates.put("songCount", playlist.getSongCount() + 1);
+
+        playlistRef.updateChildren(updates)
                 .addOnSuccessListener(aVoid -> {
                     Log.d("AddSong", "Song saved successfully in Firebase");
 
@@ -180,12 +187,13 @@ public class PlaylistDetailFragment extends Fragment {
                     }
 
                     playlist.getSongs().add(newSong);
+                    playlist.setSongCount(playlist.getSongCount() + 1);
                     Log.d("AddSong", "Song added to local playlist");
 
-                    songAdapter.notifyDataSetChanged();
+                    int newSongPosition = playlist.getSongs().size() - 1;
+                    songAdapter.notifyItemInserted(newSongPosition);
                     Log.d("AddSong", "UI updated successfully after adding song.");
 
-                    updateSongCountInDatabase(playlist.getSongs().size());
                     Toast.makeText(getContext(), "Song added successfully", Toast.LENGTH_SHORT).show();
                 })
                 .addOnFailureListener(e -> {

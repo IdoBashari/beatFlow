@@ -48,6 +48,13 @@ public class MainActivity extends AppCompatActivity {
             });
         }).start();
     }
+    public void popBackStack() {
+        if (getSupportFragmentManager().getBackStackEntryCount() > 1) {
+            getSupportFragmentManager().popBackStack();
+        } else {
+            finish();
+        }
+    }
     private void setupBottomNavigation() {
         bottomNav = findViewById(R.id.bottom_navigation);
         if (bottomNav != null) {
@@ -92,6 +99,8 @@ public class MainActivity extends AppCompatActivity {
         transaction.commit();
         currentFragmentTag = tag;
     }
+
+
 
     private void openCreatePlaylistDialog() {
         Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);

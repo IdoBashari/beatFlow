@@ -23,8 +23,11 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
         this.longClickListener = longClickListener;
     }
     public void removePlaylist(Playlist playlist) {
-        playlists.remove(playlist);
-        notifyDataSetChanged();
+        int position = playlists.indexOf(playlist);
+        if (position != -1) {
+            playlists.remove(position);
+            notifyItemRemoved(position);
+        }
     }
 
 

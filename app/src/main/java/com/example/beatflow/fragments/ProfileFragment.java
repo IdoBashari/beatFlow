@@ -17,6 +17,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
@@ -92,6 +93,8 @@ public class ProfileFragment extends Fragment {
         return binding.getRoot();
     }
 
+
+
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -101,6 +104,16 @@ public class ProfileFragment extends Fragment {
         setupPlaylistRecyclerView();
         loadPlaylists();
         setupEditProfileButton();
+
+        requireActivity().getOnBackPressedDispatcher().addCallback(getViewLifecycleOwner(),
+                new OnBackPressedCallback(true) {
+                    @Override
+                    public void handleOnBackPressed() {
+                        if (getActivity() instanceof MainActivity) {
+                            ((MainActivity) getActivity()).popBackStack();
+                        }
+                    }
+                });
     }
 
     private void initFirebase() {
@@ -203,6 +216,8 @@ public class ProfileFragment extends Fragment {
             Toast.makeText(requireContext(), "User not logged in", Toast.LENGTH_SHORT).show();
         }
     }
+
+
 
     private void showEditOptionsDialog() {
         Context context = getContext();
@@ -344,22 +359,29 @@ public class ProfileFragment extends Fragment {
                 .setNegativeButton("Cancel", null)
                 .show();
 
-        return true; // אם הטיפול בלחיצה ארוכה הצליח
+        return true;
     }
     private void deletePlaylist(Playlist playlist) {
-        // מחיקת הפלייליסט מהמאגר או הרשימה המקומית
-        // לדוגמה, אם הפלייליסט נשמר במאגר מקומי או Firebase:
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user == null) {
+            Toast.makeText(requireContext(), "User not logged in", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-        // מחיקת הפלייליסט מהרשימה המקומית ב-Adapter
-        playlistAdapter.removePlaylist(playlist);
+        DatabaseReference playlistRef = databaseReference
+                .child("users")
+                .child(user.getUid())
+                .child("playlists")
+                .child(playlist.getId());
 
-
-        databaseReference.child("playlists").child(playlist.getId()).removeValue()
+        playlistRef.removeValue()
                 .addOnSuccessListener(aVoid -> {
+                    playlistAdapter.removePlaylist(playlist);
+                    playlistAdapter.notifyDataSetChanged();
                     Toast.makeText(requireContext(), "Playlist deleted", Toast.LENGTH_SHORT).show();
                 })
                 .addOnFailureListener(e -> {
-                    Toast.makeText(requireContext(), "Failed to delete playlist", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), "Failed to delete playlist: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 });
     }
 
@@ -427,7 +449,7 @@ public class ProfileFragment extends Fragment {
 
     private void handlePlaylistSelection(Playlist playlist) {
         PlaylistDetailFragment detailFragment = PlaylistDetailFragment.newInstance(playlist.getId());
-        ((MainActivity) requireActivity()).loadFragment(detailFragment);
+        ((MainActivity) requireActivity()).loadFragment(detailFragment, "playlist_detail");
     }
 
     @Override
@@ -435,4 +457,6 @@ public class ProfileFragment extends Fragment {
         super.onDestroyView();
         binding = null;
     }
+
+
 }
