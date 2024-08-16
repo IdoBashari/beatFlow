@@ -5,7 +5,7 @@ import androidx.fragment.app.Fragment;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import com.example.beatflow.fragments.EmptyHomeFragment;
+import com.example.beatflow.fragments.HomeSearchFragment;
 import com.example.beatflow.fragments.LoginFragment;
 import com.example.beatflow.fragments.ProfileFragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -62,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
                 int itemId = item.getItemId();
 
                 if (itemId == R.id.nav_home_search) {
-                    loadFragment(new EmptyHomeFragment(), "home");
+                    loadFragment(new HomeSearchFragment(), "home");
                 } else if (itemId == R.id.nav_add_playlist) {
                     openCreatePlaylistDialog();
                 } else if (itemId == R.id.nav_profile) {
@@ -78,7 +78,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadInitialFragment() {
         if (mAuth.getCurrentUser() != null) {
-            loadFragment(new EmptyHomeFragment(), "home");
+            loadFragment(new HomeSearchFragment(), "home");
             bottomNav.setVisibility(View.VISIBLE);
         } else {
             loadFragment(new LoginFragment(), "login");

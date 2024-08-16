@@ -9,11 +9,13 @@ public class Playlist {
     private int songCount;
     private String imageUrl;
     private List<Song> songs;
+    private String creatorId;  // New field
 
     public Playlist() {
+        // Empty constructor required for Firebase
     }
 
-    public Playlist(String id, String name, String description, int songCount, String imageUrl, List<Song> songs) {
+    public Playlist(String id, String name, String description, int songCount, String imageUrl, List<Song> songs, String creatorId) {
         if (id == null || id.isEmpty()) {
             throw new IllegalArgumentException("Playlist ID cannot be null or empty");
         }
@@ -23,6 +25,7 @@ public class Playlist {
         this.songCount = songCount;
         this.imageUrl = imageUrl;
         this.songs = songs;
+        this.creatorId = creatorId;
     }
 
     public String getId() {
@@ -71,5 +74,13 @@ public class Playlist {
 
     public void setSongs(List<Song> songs) {
         this.songs = songs;
+    }
+
+    public String getCreatorId() {
+        return creatorId;
+    }
+
+    public void setCreatorId(String creatorId) {
+        this.creatorId = creatorId;
     }
 }

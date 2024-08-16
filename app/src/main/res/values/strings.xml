@@ -30,4 +30,7 @@
     <string name="edit_profile_info">Edit Profile Info</string>
     <string name="name">Name</string>
     <string name="description">Description</string>
+    <string name="user_profile_image_description">User profile image</string>
+    <string name="song_count">%d songs</string>
+    <string name="no_results_found">No results found</string>
 </resources>

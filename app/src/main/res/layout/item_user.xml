@@ -6,31 +6,32 @@
     android:padding="8dp">
 
     <ImageView
-        android:id="@+id/playlistImage"
+        android:id="@+id/userImage"
         android:layout_width="60dp"
         android:layout_height="60dp"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:contentDescription="@string/user_profile_image_description" />
 
     <TextView
-        android:id="@+id/playlistNameSmall"
+        android:id="@+id/userName"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
         android:textSize="16sp"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/playlistImage"
-        app:layout_constraintTop_toTopOf="@id/playlistImage" />
+        app:layout_constraintStart_toEndOf="@id/userImage"
+        app:layout_constraintTop_toTopOf="@id/userImage" />
 
     <TextView
-        android:id="@+id/songCount"
+        android:id="@+id/userDescription"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
         android:layout_marginTop="4dp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/playlistImage"
-        app:layout_constraintTop_toBottomOf="@id/playlistNameSmall" />
+        app:layout_constraintStart_toEndOf="@id/userImage"
+        app:layout_constraintTop_toBottomOf="@id/userName" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

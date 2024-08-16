@@ -22,6 +22,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
         this.clickListener = clickListener;
         this.longClickListener = longClickListener;
     }
+
     public void removePlaylist(Playlist playlist) {
         int position = playlists.indexOf(playlist);
         if (position != -1) {
@@ -29,7 +30,6 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
             notifyItemRemoved(position);
         }
     }
-
 
     @NonNull
     @Override
@@ -69,16 +69,19 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
     static class PlaylistViewHolder extends RecyclerView.ViewHolder {
         private final ImageView playlistImage;
         private final TextView playlistName;
+        private final TextView songCount;
 
         PlaylistViewHolder(@NonNull View itemView) {
             super(itemView);
             playlistImage = itemView.findViewById(R.id.playlistImage);
             playlistName = itemView.findViewById(R.id.playlistNameSmall);
+            songCount = itemView.findViewById(R.id.songCount);
         }
 
         void bind(final Playlist playlist, final OnPlaylistClickListener clickListener, final OnPlaylistLongClickListener longClickListener) {
             if (playlist != null) {
                 playlistName.setText(playlist.getName());
+                songCount.setText(itemView.getContext().getString(R.string.song_count, playlist.getSongCount()));
 
                 if (playlist.getImageUrl() != null && !playlist.getImageUrl().isEmpty()) {
                     Glide.with(itemView.getContext())
