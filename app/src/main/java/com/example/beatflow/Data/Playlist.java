@@ -1,5 +1,6 @@
 package com.example.beatflow.Data;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class Playlist {
@@ -15,17 +16,13 @@ public class Playlist {
         // Empty constructor required for Firebase
     }
 
-    public Playlist(String id, String name, String description, int songCount, String imageUrl, List<Song> songs, String creatorId) {
-        if (id == null || id.isEmpty()) {
-            throw new IllegalArgumentException("Playlist ID cannot be null or empty");
-        }
+    public Playlist(String id, String name, String description, int songCount, String imageUrl, List<Song> songs) {
         this.id = id;
         this.name = name;
         this.description = description;
         this.songCount = songCount;
         this.imageUrl = imageUrl;
-        this.songs = songs;
-        this.creatorId = creatorId;
+        this.songs = songs != null ? songs : new ArrayList<>();
     }
 
     public String getId() {

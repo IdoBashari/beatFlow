@@ -14,6 +14,7 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.example.beatflow.PlaylistAdapter;
+import com.example.beatflow.R;
 import com.example.beatflow.UserAdapter;
 import com.example.beatflow.Data.Playlist;
 import com.example.beatflow.Data.User;
@@ -49,19 +50,16 @@ public class HomeSearchFragment extends Fragment {
 
         setupRecyclerViews();
         setupSearchView();
+        loadRecommendations();
     }
 
     private void setupRecyclerViews() {
-        playlistAdapter = new PlaylistAdapter(new ArrayList<>(), playlist -> {
-            // TODO: Handle playlist click
-        }, playlist -> {
-            // TODO: Handle playlist long click
+        playlistAdapter = new PlaylistAdapter(new ArrayList<>(), this::onPlaylistClick, playlist -> {
+            // Handle playlist long click if needed
             return true;
         });
 
-        userAdapter = new UserAdapter(new ArrayList<>(), user -> {
-            // TODO: Handle user click
-        });
+        userAdapter = new UserAdapter(new ArrayList<>(), this::onUserClick);
 
         binding.recyclerViewPlaylists.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.recyclerViewPlaylists.setAdapter(playlistAdapter);
@@ -185,6 +183,72 @@ public class HomeSearchFragment extends Fragment {
                 binding.recyclerViewPlaylists.setVisibility(View.VISIBLE);
             }
         }
+    }
+
+    private void onUserClick(User user) {
+        UserProfileFragment userProfileFragment = UserProfileFragment.newInstance(user.getId());
+        requireActivity().getSupportFragmentManager().beginTransaction()
+                .replace(R.id.fragment_container, userProfileFragment)
+                .addToBackStack(null)
+                .commit();
+    }
+
+    private void onPlaylistClick(Playlist playlist) {
+        // Navigate to playlist detail
+        PlaylistDetailFragment playlistDetailFragment = PlaylistDetailFragment.newInstance(playlist.getId());
+        requireActivity().getSupportFragmentManager().beginTransaction()
+                .replace(R.id.fragment_container, playlistDetailFragment)
+                .addToBackStack(null)
+                .commit();
+    }
+
+    private void loadRecommendations() {
+        loadRecommendedUsers();
+        loadRecommendedPlaylists();
+    }
+
+    private void loadRecommendedUsers() {
+        databaseRef.child("users").limitToFirst(5).addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                List<User> recommendedUsers = new ArrayList<>();
+                for (DataSnapshot userSnapshot : dataSnapshot.getChildren()) {
+                    User user = userSnapshot.getValue(User.class);
+                    if (user != null) {
+                        recommendedUsers.add(user);
+                    }
+                }
+                userAdapter.setUsers(recommendedUsers);
+                binding.recyclerViewUsers.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+                Toast.makeText(getContext(), "Error loading recommended users: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void loadRecommendedPlaylists() {
+        databaseRef.child("playlists").limitToFirst(5).addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                List<Playlist> recommendedPlaylists = new ArrayList<>();
+                for (DataSnapshot playlistSnapshot : dataSnapshot.getChildren()) {
+                    Playlist playlist = playlistSnapshot.getValue(Playlist.class);
+                    if (playlist != null) {
+                        recommendedPlaylists.add(playlist);
+                    }
+                }
+                playlistAdapter.setPlaylists(recommendedPlaylists);
+                binding.recyclerViewPlaylists.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+                Toast.makeText(getContext(), "Error loading recommended playlists: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Override
