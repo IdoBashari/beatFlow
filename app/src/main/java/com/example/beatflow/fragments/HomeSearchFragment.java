@@ -13,6 +13,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
+import com.example.beatflow.Data.Song;
 import com.example.beatflow.PlaylistAdapter;
 import com.example.beatflow.R;
 import com.example.beatflow.UserAdapter;
@@ -54,11 +55,21 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void setupRecyclerViews() {
-        playlistAdapter = new PlaylistAdapter(new ArrayList<>(), this::onPlaylistClick, playlist -> {
-            // Handle playlist long click if needed
-            return true;
-        });
-
+        playlistAdapter = new PlaylistAdapter(
+                new ArrayList<>(),
+                new PlaylistAdapter.OnPlaylistClickListener() {
+                    @Override
+                    public void onPlaylistClick(Playlist playlist) {
+                        HomeSearchFragment.this.onPlaylistClick(playlist);
+                    }
+                },
+                new PlaylistAdapter.OnPlaylistLongClickListener() {
+                    @Override
+                    public boolean onPlaylistLongClick(Playlist playlist) {
+                        return false; // או כל לוגיקה אחרת שתרצה ללחיצה ארוכה
+                    }
+                }
+        );
         userAdapter = new UserAdapter(new ArrayList<>(), this::onUserClick);
 
         binding.recyclerViewPlaylists.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -67,6 +78,8 @@ public class HomeSearchFragment extends Fragment {
         binding.recyclerViewUsers.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.recyclerViewUsers.setAdapter(userAdapter);
     }
+
+
 
     private void setupSearchView() {
         binding.editTextSearch.addTextChangedListener(new TextWatcher() {
@@ -99,12 +112,8 @@ public class HomeSearchFragment extends Fragment {
 
         if (binding.radioButtonUsers.isChecked()) {
             searchUsers(query);
-            binding.recyclerViewUsers.setVisibility(View.VISIBLE);
-            binding.recyclerViewPlaylists.setVisibility(View.GONE);
         } else {
             searchPlaylists(query);
-            binding.recyclerViewUsers.setVisibility(View.GONE);
-            binding.recyclerViewPlaylists.setVisibility(View.VISIBLE);
         }
     }
 
@@ -121,6 +130,7 @@ public class HomeSearchFragment extends Fragment {
                 for (DataSnapshot userSnapshot : dataSnapshot.getChildren()) {
                     User user = userSnapshot.getValue(User.class);
                     if (user != null) {
+                        user.setId(userSnapshot.getKey());
                         users.add(user);
                     }
                 }
@@ -136,7 +146,7 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void searchPlaylists(String query) {
-        Query searchQuery = databaseRef.child("playlists").orderByChild("name")
+        Query searchQuery = databaseRef.child("users").orderByChild("playlists/name")
                 .startAt(query)
                 .endAt(query + "\uf8ff")
                 .limitToFirst(10);
@@ -145,10 +155,22 @@ public class HomeSearchFragment extends Fragment {
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                 List<Playlist> playlists = new ArrayList<>();
-                for (DataSnapshot playlistSnapshot : dataSnapshot.getChildren()) {
-                    Playlist playlist = playlistSnapshot.getValue(Playlist.class);
-                    if (playlist != null) {
-                        playlists.add(playlist);
+                for (DataSnapshot userSnapshot : dataSnapshot.getChildren()) {
+                    DataSnapshot playlistsSnapshot = userSnapshot.child("playlists");
+                    for (DataSnapshot playlistSnapshot : playlistsSnapshot.getChildren()) {
+                        String id = playlistSnapshot.getKey();
+                        String name = playlistSnapshot.child("name").getValue(String.class);
+                        String description = playlistSnapshot.child("description").getValue(String.class);
+                        Long songCountLong = playlistSnapshot.child("songCount").getValue(Long.class);
+                        int songCount = songCountLong != null ? songCountLong.intValue() : 0;
+                        String imageUrl = playlistSnapshot.child("imageUrl").getValue(String.class);
+                        String creatorId = userSnapshot.getKey();
+                        List<Song> songs = new ArrayList<>(); // יש להוסיף לוגיקה לטעינת השירים אם נדרש
+
+                        if (name != null && name.toLowerCase().contains(query.toLowerCase())) {
+                            Playlist playlist = new Playlist(id, name, description, songCount, imageUrl, songs, creatorId);
+                            playlists.add(playlist);
+                        }
                     }
                 }
                 playlistAdapter.setPlaylists(playlists);
@@ -169,20 +191,9 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void updateEmptyView(boolean isEmpty) {
-        if (isEmpty) {
-            binding.textViewNoResults.setVisibility(View.VISIBLE);
-            binding.recyclerViewUsers.setVisibility(View.GONE);
-            binding.recyclerViewPlaylists.setVisibility(View.GONE);
-        } else {
-            binding.textViewNoResults.setVisibility(View.GONE);
-            if (binding.radioButtonUsers.isChecked()) {
-                binding.recyclerViewUsers.setVisibility(View.VISIBLE);
-                binding.recyclerViewPlaylists.setVisibility(View.GONE);
-            } else {
-                binding.recyclerViewUsers.setVisibility(View.GONE);
-                binding.recyclerViewPlaylists.setVisibility(View.VISIBLE);
-            }
-        }
+        binding.textViewNoResults.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
+        binding.recyclerViewUsers.setVisibility(binding.radioButtonUsers.isChecked() && !isEmpty ? View.VISIBLE : View.GONE);
+        binding.recyclerViewPlaylists.setVisibility(binding.radioButtonPlaylists.isChecked() && !isEmpty ? View.VISIBLE : View.GONE);
     }
 
     private void onUserClick(User user) {
@@ -194,8 +205,7 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void onPlaylistClick(Playlist playlist) {
-        // Navigate to playlist detail
-        PlaylistDetailFragment playlistDetailFragment = PlaylistDetailFragment.newInstance(playlist.getId());
+        PlaylistDetailFragment playlistDetailFragment = PlaylistDetailFragment.newInstance(playlist.getCreatorId(), playlist.getId());
         requireActivity().getSupportFragmentManager().beginTransaction()
                 .replace(R.id.fragment_container, playlistDetailFragment)
                 .addToBackStack(null)
@@ -215,6 +225,7 @@ public class HomeSearchFragment extends Fragment {
                 for (DataSnapshot userSnapshot : dataSnapshot.getChildren()) {
                     User user = userSnapshot.getValue(User.class);
                     if (user != null) {
+                        user.setId(userSnapshot.getKey());
                         recommendedUsers.add(user);
                     }
                 }
@@ -230,15 +241,22 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void loadRecommendedPlaylists() {
-        databaseRef.child("playlists").limitToFirst(5).addListenerForSingleValueEvent(new ValueEventListener() {
+        databaseRef.child("users").limitToFirst(5).addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                 List<Playlist> recommendedPlaylists = new ArrayList<>();
-                for (DataSnapshot playlistSnapshot : dataSnapshot.getChildren()) {
-                    Playlist playlist = playlistSnapshot.getValue(Playlist.class);
-                    if (playlist != null) {
-                        recommendedPlaylists.add(playlist);
+                for (DataSnapshot userSnapshot : dataSnapshot.getChildren()) {
+                    DataSnapshot playlistsSnapshot = userSnapshot.child("playlists");
+                    for (DataSnapshot playlistSnapshot : playlistsSnapshot.getChildren()) {
+                        Playlist playlist = playlistSnapshot.getValue(Playlist.class);
+                        if (playlist != null) {
+                            playlist.setId(playlistSnapshot.getKey());
+                            playlist.setCreatorId(userSnapshot.getKey());
+                            recommendedPlaylists.add(playlist);
+                            if (recommendedPlaylists.size() >= 5) break;
+                        }
                     }
+                    if (recommendedPlaylists.size() >= 5) break;
                 }
                 playlistAdapter.setPlaylists(recommendedPlaylists);
                 binding.recyclerViewPlaylists.setVisibility(View.VISIBLE);
@@ -256,4 +274,6 @@ public class HomeSearchFragment extends Fragment {
         super.onDestroyView();
         binding = null;
     }
+
+
 }

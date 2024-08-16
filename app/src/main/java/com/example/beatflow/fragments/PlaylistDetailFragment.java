@@ -49,10 +49,14 @@ public class PlaylistDetailFragment extends Fragment {
     private static RecyclerView.RecycledViewPool sharedPool = new RecyclerView.RecycledViewPool();
 
     private FirebaseAuth firebaseAuth;
+    private String creatorId;
 
-    public static PlaylistDetailFragment newInstance(String playlistId) {
+    private boolean isCreator;
+
+    public static PlaylistDetailFragment newInstance(String creatorId, String playlistId) {
         PlaylistDetailFragment fragment = new PlaylistDetailFragment();
         Bundle args = new Bundle();
+        args.putString("creatorId", creatorId);
         args.putString("playlistId", playlistId);
         fragment.setArguments(args);
         return fragment;
@@ -62,7 +66,9 @@ public class PlaylistDetailFragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (getArguments() != null) {
+            creatorId = getArguments().getString("creatorId");
             playlistId = getArguments().getString("playlistId");
+            isCreator = getArguments().getBoolean("isCreator", false);
         }
         databaseReference = FirebaseDatabase.getInstance().getReference();
         firebaseAuth = FirebaseAuth.getInstance();
@@ -83,7 +89,7 @@ public class PlaylistDetailFragment extends Fragment {
         binding.addSongButton.setEnabled(false);
         setupAddSongButton();
 
-        // הגדרת מאזין ללחיצה ארוכה על שיר
+
         songAdapter.setOnSongLongClickListener(song -> showDeleteSongDialog(song));
     }
     private void showDeleteSongDialog(Song song) {
@@ -101,14 +107,14 @@ public class PlaylistDetailFragment extends Fragment {
         }
 
         FirebaseUser user = firebaseAuth.getCurrentUser();
-        if (user == null) {
-            Toast.makeText(getContext(), "User not logged in", Toast.LENGTH_SHORT).show();
+        if (user == null || !user.getUid().equals(creatorId)) {
+            Toast.makeText(getContext(), "Only the playlist creator can delete songs", Toast.LENGTH_SHORT).show();
             return;
         }
 
         DatabaseReference songRef = databaseReference
                 .child("users")
-                .child(user.getUid())
+                .child(creatorId)
                 .child("playlists")
                 .child(playlistId)
                 .child("songs")
@@ -164,7 +170,13 @@ public class PlaylistDetailFragment extends Fragment {
 
 
     private void setupAddSongButton() {
-        binding.addSongButton.setOnClickListener(v -> showAddSongDialog());
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user != null && user.getUid().equals(creatorId)) {
+            binding.addSongButton.setVisibility(View.VISIBLE);
+            binding.addSongButton.setOnClickListener(v -> showAddSongDialog());
+        } else {
+            binding.addSongButton.setVisibility(View.GONE);
+        }
     }
 
     private void showAddSongDialog() {
@@ -204,7 +216,7 @@ public class PlaylistDetailFragment extends Fragment {
             return;
         }
 
-        DatabaseReference playlistRef = databaseReference.child("users").child(user.getUid()).child("playlists").child(playlistId);
+        DatabaseReference playlistRef = databaseReference.child("users").child(creatorId).child("playlists").child(playlistId);
         String songId = playlistRef.child("songs").push().getKey();
         if (songId == null) {
             Log.e("AddSong", "Error: Failed to generate song ID");
@@ -246,79 +258,61 @@ public class PlaylistDetailFragment extends Fragment {
 
 
 
-    private void updateSongCountInDatabase(int songCount) {
-        if (playlistId != null) {
-            databaseReference.child("playlists").child(playlistId).child("songCount").setValue(songCount)
-                    .addOnSuccessListener(aVoid -> Log.d("UpdateSongCount", "Song count updated successfully"))
-                    .addOnFailureListener(e -> {
-                        Toast.makeText(getContext(), "Failed to update song count", Toast.LENGTH_SHORT).show();
-                        Log.e("UpdateSongCount", "Error updating song count", e);
-                    });
-        }
-    }
 
 
     private void loadPlaylistData() {
         showLoading(true);
         Log.d("PlaylistDetailFragment", "Starting to load playlist data for ID: " + playlistId);
 
-        if (playlistId != null) {
-            FirebaseUser user = firebaseAuth.getCurrentUser();
-            if (user != null) {
-                Log.d("PlaylistDetailFragment", "User is logged in with UID: " + user.getUid());
-                String path = "users/" + user.getUid() + "/playlists/" + playlistId;
-                Log.d("PlaylistDetailFragment", "Attempting to load from path: " + path);
+        if (playlistId != null && creatorId != null) {
+            String path = "users/" + creatorId + "/playlists/" + playlistId;
+            Log.d("PlaylistDetailFragment", "Attempting to load from path: " + path);
 
-                databaseReference.child(path).addListenerForSingleValueEvent(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                        Log.d("PlaylistDetailFragment", "Data snapshot received. Exists: " + dataSnapshot.exists());
-                        if (dataSnapshot.exists()) {
-                            String name = dataSnapshot.child("name").getValue(String.class);
-                            String description = dataSnapshot.child("description").getValue(String.class);
-                            String imageUrl = dataSnapshot.child("imageUrl").getValue(String.class);
-                            Long songCountLong = dataSnapshot.child("songCount").getValue(Long.class);
-                            int songCount = songCountLong != null ? songCountLong.intValue() : 0;
+            databaseReference.child(path).addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    Log.d("PlaylistDetailFragment", "Data snapshot received. Exists: " + dataSnapshot.exists());
+                    if (dataSnapshot.exists()) {
+                        String name = dataSnapshot.child("name").getValue(String.class);
+                        String description = dataSnapshot.child("description").getValue(String.class);
+                        String imageUrl = dataSnapshot.child("imageUrl").getValue(String.class);
+                        Long songCountLong = dataSnapshot.child("songCount").getValue(Long.class);
+                        int songCount = songCountLong != null ? songCountLong.intValue() : 0;
 
-                            List<Song> songs = new ArrayList<>();
-                            DataSnapshot songsSnapshot = dataSnapshot.child("songs");
-                            if (songsSnapshot.exists()) {
-                                for (DataSnapshot songSnapshot : songsSnapshot.getChildren()) {
-                                    Song song = songSnapshot.getValue(Song.class);
-                                    if (song != null) {
-                                        songs.add(song);
-                                    }
+                        List<Song> songs = new ArrayList<>();
+                        DataSnapshot songsSnapshot = dataSnapshot.child("songs");
+                        if (songsSnapshot.exists()) {
+                            for (DataSnapshot songSnapshot : songsSnapshot.getChildren()) {
+                                Song song = songSnapshot.getValue(Song.class);
+                                if (song != null) {
+                                    songs.add(song);
                                 }
                             }
-
-                            playlist = new Playlist(playlistId, name, description, songCount, imageUrl, songs);
-                            Log.d("PlaylistDetailFragment", "Playlist loaded successfully: " + playlist.getName());
-                            Log.d("PlaylistDetailFragment", "Songs loaded: " + songs.size());
-
-                            binding.addSongButton.setEnabled(true);
-                            updateUI();
-                        } else {
-                            Log.d("PlaylistDetailFragment", "Playlist not found for ID: " + playlistId);
-                            Toast.makeText(getContext(), "Playlist not found", Toast.LENGTH_SHORT).show();
                         }
-                        showLoading(false);
-                    }
 
-                    @Override
-                    public void onCancelled(@NonNull DatabaseError databaseError) {
-                        Log.e("PlaylistDetailFragment", "Database error: " + databaseError.getMessage(), databaseError.toException());
-                        Toast.makeText(getContext(), "Failed to load playlist: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
-                        showLoading(false);
+                        playlist = new Playlist(playlistId, name, description, songCount, imageUrl, songs, creatorId);
+                        Log.d("PlaylistDetailFragment", "Playlist loaded successfully: " + playlist.getName());
+                        Log.d("PlaylistDetailFragment", "Songs loaded: " + songs.size());
+
+                        binding.addSongButton.setEnabled(true);
+                        updateUI();
+                    } else {
+                        Log.d("PlaylistDetailFragment", "Playlist not found for ID: " + playlistId);
+                        Toast.makeText(getContext(), "Playlist not found", Toast.LENGTH_SHORT).show();
                     }
-                });
-            } else {
-                Log.e("PlaylistDetailFragment", "User is not logged in");
-                Toast.makeText(getContext(), "User is not logged in", Toast.LENGTH_SHORT).show();
-                showLoading(false);
-            }
+                    showLoading(false);
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+                    Log.e("PlaylistDetailFragment", "Database error: " + databaseError.getMessage(), databaseError.toException());
+                    Toast.makeText(getContext(), "Failed to load playlist: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+                    showLoading(false);
+                }
+            });
         } else {
-            Log.e("PlaylistDetailFragment", "Playlist ID is null");
-            Toast.makeText(getContext(), "Playlist ID is null", Toast.LENGTH_SHORT).show();
+            Log.e("PlaylistDetailFragment", "Playlist ID or Creator ID is null");
+            Toast.makeText(getContext(), "Playlist ID or Creator ID is null", Toast.LENGTH_SHORT).show();
             showLoading(false);
         }
     }

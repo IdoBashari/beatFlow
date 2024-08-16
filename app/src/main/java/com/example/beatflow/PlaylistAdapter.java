@@ -15,13 +15,14 @@ import android.util.Log;
 public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.PlaylistViewHolder> {
     private List<Playlist> playlists;
     private final OnPlaylistClickListener clickListener;
-    private OnPlaylistLongClickListener longClickListener;
+    private final OnPlaylistLongClickListener longClickListener;
 
     public PlaylistAdapter(List<Playlist> playlists, OnPlaylistClickListener clickListener, OnPlaylistLongClickListener longClickListener) {
         this.playlists = playlists;
         this.clickListener = clickListener;
         this.longClickListener = longClickListener;
     }
+
 
     public void removePlaylist(Playlist playlist) {
         int position = playlists.indexOf(playlist);
@@ -60,10 +61,6 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
     public void setPlaylists(List<Playlist> playlists) {
         this.playlists = playlists;
         notifyDataSetChanged();
-    }
-
-    public void setOnPlaylistLongClickListener(OnPlaylistLongClickListener listener) {
-        this.longClickListener = listener;
     }
 
     static class PlaylistViewHolder extends RecyclerView.ViewHolder {
@@ -118,4 +115,6 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
     public interface OnPlaylistLongClickListener {
         boolean onPlaylistLongClick(Playlist playlist);
     }
+
+
 }

@@ -46,7 +46,7 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
-import android.content.Intent;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -229,7 +229,7 @@ public class ProfileFragment extends Fragment {
     }
 
     private void savePlaylistToDatabase(String playlistId, String name, String description, String imageUrl) {
-        Playlist newPlaylist = new Playlist(playlistId, name, description, 0, imageUrl, new ArrayList<>());
+        Playlist newPlaylist = new Playlist(playlistId, name, description, 0, imageUrl, new ArrayList<>(), firebaseAuth.getCurrentUser().getUid());
 
         FirebaseUser user = firebaseAuth.getCurrentUser();
         if (user != null) {
@@ -289,43 +289,7 @@ public class ProfileFragment extends Fragment {
         }
     }
 
-    private void launchImagePicker() {
-        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-        imagePickerLauncher.launch(intent);
-    }
 
-    private void uploadProfileImage(Uri imageUri) {
-        if (imageUri != null && firebaseAuth.getCurrentUser() != null) {
-            binding.profileImageProgressBar.setVisibility(View.VISIBLE);
-            StorageReference fileRef = storageRef.child("users/" + firebaseAuth.getCurrentUser().getUid() + "/profile.jpg");
-            new Thread(() -> {
-                fileRef.putFile(imageUri).addOnSuccessListener(taskSnapshot ->
-                        fileRef.getDownloadUrl().addOnSuccessListener(uri -> {
-                            String imageUrl = uri.toString();
-                            databaseReference.child("users").child(firebaseAuth.getCurrentUser().getUid()).child("profileImageUrl").setValue(imageUrl)
-                                    .addOnSuccessListener(aVoid ->
-                                            requireActivity().runOnUiThread(() -> {
-                                                loadProfileImage(imageUrl);
-                                                binding.profileImageProgressBar.setVisibility(View.GONE);
-                                                Toast.makeText(requireContext(), "Profile image updated successfully", Toast.LENGTH_SHORT).show();
-                                            })
-                                    )
-                                    .addOnFailureListener(e ->
-                                            requireActivity().runOnUiThread(() -> {
-                                                binding.profileImageProgressBar.setVisibility(View.GONE);
-                                                Toast.makeText(requireContext(), "Failed to update profile image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                                            })
-                                    );
-                        })
-                ).addOnFailureListener(e ->
-                        requireActivity().runOnUiThread(() -> {
-                            binding.profileImageProgressBar.setVisibility(View.GONE);
-                            Toast.makeText(requireContext(), "Failed to upload image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        })
-                );
-            }).start();
-        }
-    }
 
     private void showEditProfileDialog() {
         if (currentUser == null) {
@@ -370,31 +334,37 @@ public class ProfileFragment extends Fragment {
         }
     }
 
-    private void performLogout() {
-        firebaseAuth.signOut();
-        startActivity(new Intent(getContext(), MainActivity.class));
-        getActivity().finish();
-    }
+
 
     private void setupPlaylistRecyclerView() {
-        playlistAdapter = new PlaylistAdapter(new ArrayList<>(),
-                this::handlePlaylistSelection,
-                this::handlePlaylistLongClick // הוספת מאזין ללחיצה ארוכה
+        playlistAdapter = new PlaylistAdapter(
+                new ArrayList<>(),
+                new PlaylistAdapter.OnPlaylistClickListener() {
+                    @Override
+                    public void onPlaylistClick(Playlist playlist) {
+                        handlePlaylistSelection(playlist);
+                    }
+                },
+                new PlaylistAdapter.OnPlaylistLongClickListener() {
+                    @Override
+                    public boolean onPlaylistLongClick(Playlist playlist) {
+                        return handlePlaylistLongClick(playlist);
+                    }
+                }
         );
         binding.playlistsRecyclerView.setLayoutManager(new GridLayoutManager(requireContext(), 2));
         binding.playlistsRecyclerView.setAdapter(playlistAdapter);
     }
+
     private boolean handlePlaylistLongClick(Playlist playlist) {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Delete Playlist")
                 .setMessage("Are you sure you want to delete this playlist?")
                 .setPositiveButton("Delete", (dialog, which) -> {
-                    // פעולה למחיקת הפלייליסט
                     deletePlaylist(playlist);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
-
         return true;
     }
     private void deletePlaylist(Playlist playlist) {
@@ -441,6 +411,7 @@ public class ProfileFragment extends Fragment {
                         Long songCountLong = snapshot.child("songCount").getValue(Long.class);
                         int songCount = songCountLong != null ? songCountLong.intValue() : 0;
                         String imageUrl = snapshot.child("imageUrl").getValue(String.class);
+                        String creatorId = snapshot.child("creatorId").getValue(String.class);
 
                         List<Song> songs = new ArrayList<>();
                         DataSnapshot songsSnapshot = snapshot.child("songs");
@@ -453,7 +424,7 @@ public class ProfileFragment extends Fragment {
                             }
                         }
 
-                        Playlist playlist = new Playlist(id, name, description, songCount, imageUrl, songs);
+                        Playlist playlist = new Playlist(id, name, description, songCount, imageUrl, songs, creatorId);
                         playlists.add(playlist);
                     }
                     requireActivity().runOnUiThread(() -> {
@@ -484,7 +455,7 @@ public class ProfileFragment extends Fragment {
 
 
     private void handlePlaylistSelection(Playlist playlist) {
-        PlaylistDetailFragment detailFragment = PlaylistDetailFragment.newInstance(playlist.getId());
+        PlaylistDetailFragment detailFragment = PlaylistDetailFragment.newInstance(playlist.getCreatorId(), playlist.getId());
         ((MainActivity) requireActivity()).loadFragment(detailFragment, "playlist_detail");
     }
 

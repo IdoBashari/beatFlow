@@ -13,16 +13,17 @@ public class Playlist {
     private String creatorId;  // New field
 
     public Playlist() {
-        // Empty constructor required for Firebase
+
     }
 
-    public Playlist(String id, String name, String description, int songCount, String imageUrl, List<Song> songs) {
+    public Playlist(String id, String name, String description, int songCount, String imageUrl, List<Song> songs, String creatorId) {
         this.id = id;
         this.name = name;
         this.description = description;
         this.songCount = songCount;
         this.imageUrl = imageUrl;
         this.songs = songs != null ? songs : new ArrayList<>();
+        this.creatorId = creatorId;
     }
 
     public String getId() {
