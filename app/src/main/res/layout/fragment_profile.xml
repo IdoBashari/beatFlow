@@ -101,16 +101,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/createPlaylistButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="@string/create_new_playlist"
-                android:textColor="@color/white"
-                app:backgroundTint="@color/primary_green"
-                app:icon="@drawable/ic_add_playlist"
-                app:iconTint="@color/white" />
+
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>

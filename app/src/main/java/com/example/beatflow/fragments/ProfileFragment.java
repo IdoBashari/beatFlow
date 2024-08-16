@@ -63,7 +63,7 @@ public class ProfileFragment extends Fragment {
     private ActivityResultLauncher<Intent> imagePickerLauncher;
 
     private static RecyclerView.RecycledViewPool sharedPool = new RecyclerView.RecycledViewPool();
-    private Button createPlaylistButton;
+
 
     private Uri selectedImageUri = null;
     private AlertDialog currentDialog;
@@ -103,8 +103,6 @@ public class ProfileFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        createPlaylistButton = view.findViewById(R.id.createPlaylistButton);
-        createPlaylistButton.setOnClickListener(v -> showCreatePlaylistDialog());
         setupUserInfo();
         setupPlaylistRecyclerView();
         loadPlaylists();
@@ -120,6 +118,7 @@ public class ProfileFragment extends Fragment {
                     }
                 });
     }
+
 
     private void initFirebase() {
         firebaseAuth = FirebaseAuth.getInstance();
