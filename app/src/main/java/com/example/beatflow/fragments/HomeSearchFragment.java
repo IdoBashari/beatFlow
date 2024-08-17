@@ -3,6 +3,7 @@ package com.example.beatflow.fragments;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -36,6 +37,7 @@ public class HomeSearchFragment extends Fragment {
     private PlaylistAdapter playlistAdapter;
     private UserAdapter userAdapter;
     private DatabaseReference databaseRef;
+
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -118,10 +120,11 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void searchUsers(String query) {
-        Query searchQuery = databaseRef.child("users").orderByChild("username")
-                .startAt(query)
-                .endAt(query + "\uf8ff")
-                .limitToFirst(10);
+        Query searchQuery = databaseRef.child("users")
+                .orderByChild("nameLowerCase")
+                .startAt(query.toLowerCase())
+                .endAt(query.toLowerCase() + "\uf8ff")
+                .limitToFirst(20);
 
         searchQuery.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
@@ -140,37 +143,29 @@ public class HomeSearchFragment extends Fragment {
 
             @Override
             public void onCancelled(@NonNull DatabaseError databaseError) {
-                Toast.makeText(getContext(), "Error searching users: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+                Log.e("HomeSearchFragment", "Error searching users: " + databaseError.getMessage());
+                Toast.makeText(getContext(), "Error searching users. Please try again.", Toast.LENGTH_SHORT).show();
+                updateEmptyView(true);
             }
         });
     }
 
     private void searchPlaylists(String query) {
-        Query searchQuery = databaseRef.child("users").orderByChild("playlists/name")
-                .startAt(query)
-                .endAt(query + "\uf8ff")
-                .limitToFirst(10);
+        Query searchQuery = databaseRef.child("playlists")
+                .orderByChild("nameLowerCase")
+                .startAt(query.toLowerCase())
+                .endAt(query.toLowerCase() + "\uf8ff")
+                .limitToFirst(20);
 
         searchQuery.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                 List<Playlist> playlists = new ArrayList<>();
-                for (DataSnapshot userSnapshot : dataSnapshot.getChildren()) {
-                    DataSnapshot playlistsSnapshot = userSnapshot.child("playlists");
-                    for (DataSnapshot playlistSnapshot : playlistsSnapshot.getChildren()) {
-                        String id = playlistSnapshot.getKey();
-                        String name = playlistSnapshot.child("name").getValue(String.class);
-                        String description = playlistSnapshot.child("description").getValue(String.class);
-                        Long songCountLong = playlistSnapshot.child("songCount").getValue(Long.class);
-                        int songCount = songCountLong != null ? songCountLong.intValue() : 0;
-                        String imageUrl = playlistSnapshot.child("imageUrl").getValue(String.class);
-                        String creatorId = userSnapshot.getKey();
-                        List<Song> songs = new ArrayList<>(); // יש להוסיף לוגיקה לטעינת השירים אם נדרש
-
-                        if (name != null && name.toLowerCase().contains(query.toLowerCase())) {
-                            Playlist playlist = new Playlist(id, name, description, songCount, imageUrl, songs, creatorId);
-                            playlists.add(playlist);
-                        }
+                for (DataSnapshot playlistSnapshot : dataSnapshot.getChildren()) {
+                    Playlist playlist = playlistSnapshot.getValue(Playlist.class);
+                    if (playlist != null) {
+                        playlist.setId(playlistSnapshot.getKey());
+                        playlists.add(playlist);
                     }
                 }
                 playlistAdapter.setPlaylists(playlists);
@@ -241,22 +236,16 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void loadRecommendedPlaylists() {
-        databaseRef.child("users").limitToFirst(5).addListenerForSingleValueEvent(new ValueEventListener() {
+        databaseRef.child("playlists").limitToFirst(5).addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                 List<Playlist> recommendedPlaylists = new ArrayList<>();
-                for (DataSnapshot userSnapshot : dataSnapshot.getChildren()) {
-                    DataSnapshot playlistsSnapshot = userSnapshot.child("playlists");
-                    for (DataSnapshot playlistSnapshot : playlistsSnapshot.getChildren()) {
-                        Playlist playlist = playlistSnapshot.getValue(Playlist.class);
-                        if (playlist != null) {
-                            playlist.setId(playlistSnapshot.getKey());
-                            playlist.setCreatorId(userSnapshot.getKey());
-                            recommendedPlaylists.add(playlist);
-                            if (recommendedPlaylists.size() >= 5) break;
-                        }
+                for (DataSnapshot playlistSnapshot : dataSnapshot.getChildren()) {
+                    Playlist playlist = playlistSnapshot.getValue(Playlist.class);
+                    if (playlist != null) {
+                        playlist.setId(playlistSnapshot.getKey());
+                        recommendedPlaylists.add(playlist);
                     }
-                    if (recommendedPlaylists.size() >= 5) break;
                 }
                 playlistAdapter.setPlaylists(recommendedPlaylists);
                 binding.recyclerViewPlaylists.setVisibility(View.VISIBLE);

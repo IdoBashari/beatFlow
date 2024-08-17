@@ -1,7 +1,9 @@
 package com.example.beatflow.Data;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Playlist {
     private String id;
@@ -9,20 +11,21 @@ public class Playlist {
     private String description;
     private int songCount;
     private String imageUrl;
-    private List<Song> songs;
-    private String creatorId;  // New field
+    private Map<String, Song> songs;
+    private String creatorId;
+    private String nameLowerCase;
 
     public Playlist() {
-
+        // Default constructor required for calls to DataSnapshot.getValue(Playlist.class)
     }
 
-    public Playlist(String id, String name, String description, int songCount, String imageUrl, List<Song> songs, String creatorId) {
+    public Playlist(String id, String name, String description, String imageUrl, String creatorId) {
         this.id = id;
-        this.name = name;
+        setName(name);
         this.description = description;
-        this.songCount = songCount;
+        this.songCount = 0;
         this.imageUrl = imageUrl;
-        this.songs = songs != null ? songs : new ArrayList<>();
+        this.songs = new HashMap<>();
         this.creatorId = creatorId;
     }
 
@@ -40,6 +43,15 @@ public class Playlist {
 
     public void setName(String name) {
         this.name = name;
+        this.nameLowerCase = name.toLowerCase();
+    }
+
+    public String getNameLowerCase() {
+        return nameLowerCase;
+    }
+
+    public void setNameLowerCase(String nameLowerCase) {
+        this.nameLowerCase = nameLowerCase;
     }
 
     public String getDescription() {
@@ -66,12 +78,13 @@ public class Playlist {
         this.imageUrl = imageUrl;
     }
 
-    public List<Song> getSongs() {
+    public Map<String, Song> getSongs() {
         return songs;
     }
 
-    public void setSongs(List<Song> songs) {
+    public void setSongs(Map<String, Song> songs) {
         this.songs = songs;
+        this.songCount = songs != null ? songs.size() : 0;
     }
 
     public String getCreatorId() {
@@ -80,5 +93,20 @@ public class Playlist {
 
     public void setCreatorId(String creatorId) {
         this.creatorId = creatorId;
+    }
+
+    public void addSong(Song song) {
+        if (this.songs == null) {
+            this.songs = new HashMap<>();
+        }
+        this.songs.put(song.getId(), song);
+        this.songCount = this.songs.size();
+    }
+
+    public void removeSong(String songId) {
+        if (this.songs != null && this.songs.containsKey(songId)) {
+            this.songs.remove(songId);
+            this.songCount = this.songs.size();
+        }
     }
 }

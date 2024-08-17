@@ -9,11 +9,14 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
+import android.widget.EditText;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.appcompat.app.AlertDialog;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
@@ -22,6 +25,8 @@ import com.example.beatflow.Data.Song;
 import com.example.beatflow.R;
 import com.example.beatflow.SongAdapter;
 import com.example.beatflow.databinding.FragmentPlaylistDetailBinding;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
@@ -29,15 +34,8 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
-import java.util.List;
-
-import android.widget.EditText;
-import androidx.appcompat.app.AlertDialog;
-import androidx.recyclerview.widget.RecyclerView;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
-
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class PlaylistDetailFragment extends Fragment {
@@ -89,49 +87,16 @@ public class PlaylistDetailFragment extends Fragment {
         binding.addSongButton.setEnabled(false);
         setupAddSongButton();
 
-
-        songAdapter.setOnSongLongClickListener(song -> showDeleteSongDialog(song));
-    }
-    private void showDeleteSongDialog(Song song) {
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Delete Song")
-                .setMessage("Are you sure you want to delete this song?")
-                .setPositiveButton("Delete", (dialog, which) -> deleteSongFromPlaylist(song))
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-    private void deleteSongFromPlaylist(Song song) {
-        if (playlist == null || playlistId == null) {
-            Toast.makeText(getContext(), "Playlist not loaded", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        FirebaseUser user = firebaseAuth.getCurrentUser();
-        if (user == null || !user.getUid().equals(creatorId)) {
-            Toast.makeText(getContext(), "Only the playlist creator can delete songs", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        DatabaseReference songRef = databaseReference
-                .child("users")
-                .child(creatorId)
-                .child("playlists")
-                .child(playlistId)
-                .child("songs")
-                .child(song.getId());
-
-        songRef.removeValue().addOnSuccessListener(aVoid -> {
-            playlist.getSongs().remove(song);
-            songAdapter.notifyDataSetChanged();
-            Toast.makeText(getContext(), "Song deleted", Toast.LENGTH_SHORT).show();
-        }).addOnFailureListener(e -> {
-            Toast.makeText(getContext(), "Failed to delete song: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        });
+        songAdapter.setOnSongLongClickListener(this::showDeleteSongDialog);
     }
 
-
-
-
+    private void setupRecyclerView() {
+        Log.d("PlaylistDetailFragment", "Setting up RecyclerView...");
+        songAdapter = new SongAdapter(new ArrayList<>());
+        binding.songsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        binding.songsRecyclerView.setAdapter(songAdapter);
+        Log.d("PlaylistDetailFragment", "RecyclerView setup completed.");
+    }
 
     private void checkNetworkAndLoadPlaylist() {
         if (isNetworkAvailable()) {
@@ -159,16 +124,81 @@ public class PlaylistDetailFragment extends Fragment {
         loadPlaylistData();
     }
 
+    private void loadPlaylistData() {
+        showLoading(true);
+        Log.d("PlaylistDetailFragment", "Starting to load playlist data for ID: " + playlistId);
 
-    private void setupRecyclerView() {
-        Log.d("PlaylistDetailFragment", "Setting up RecyclerView...");
-        songAdapter = new SongAdapter(new ArrayList<>());
-        binding.songsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        binding.songsRecyclerView.setAdapter(songAdapter);
-        Log.d("PlaylistDetailFragment", "RecyclerView setup completed.");
+        if (playlistId != null) {
+            DatabaseReference playlistRef = databaseReference.child("playlists").child(playlistId);
+            playlistRef.addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    Log.d("PlaylistDetailFragment", "Data snapshot received. Exists: " + dataSnapshot.exists());
+                    if (dataSnapshot.exists()) {
+                        playlist = dataSnapshot.getValue(Playlist.class);
+                        if (playlist != null) {
+                            playlist.setId(playlistId);
+                            Log.d("PlaylistDetailFragment", "Playlist loaded successfully: " + playlist.getName());
+                            binding.addSongButton.setEnabled(true);
+                            updateUI();
+                            loadSongs();
+                        } else {
+                            Log.e("PlaylistDetailFragment", "Failed to parse playlist data");
+                            Toast.makeText(getContext(), "Failed to load playlist data", Toast.LENGTH_SHORT).show();
+                            requireActivity().onBackPressed();
+                        }
+                    } else {
+                        Log.e("PlaylistDetailFragment", "Playlist not found for ID: " + playlistId);
+                        Toast.makeText(getContext(), "Playlist not found", Toast.LENGTH_SHORT).show();
+                        requireActivity().onBackPressed();
+                    }
+                    showLoading(false);
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+                    Log.e("PlaylistDetailFragment", "Database error: " + databaseError.getMessage(), databaseError.toException());
+                    Toast.makeText(getContext(), "Failed to load playlist: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+                    showLoading(false);
+                    requireActivity().onBackPressed();
+                }
+            });
+        } else {
+            Log.e("PlaylistDetailFragment", "Playlist ID is null");
+            Toast.makeText(getContext(), "Invalid playlist ID", Toast.LENGTH_SHORT).show();
+            showLoading(false);
+            requireActivity().onBackPressed();
+        }
     }
 
+    private void loadSongs() {
+        if (playlist != null && playlistId != null) {
+            DatabaseReference songsRef = databaseReference.child("playlists").child(playlistId).child("songs");
+            songsRef.addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    Map<String, Song> songsMap = new HashMap<>();
+                    for (DataSnapshot songSnapshot : dataSnapshot.getChildren()) {
+                        Song song = songSnapshot.getValue(Song.class);
+                        if (song != null) {
+                            song.setId(songSnapshot.getKey());
+                            songsMap.put(song.getId(), song);
+                        }
+                    }
+                    playlist.setSongs(songsMap);
+                    songAdapter.setSongs(new ArrayList<>(songsMap.values()));
+                    songAdapter.notifyDataSetChanged();
+                    Log.d("PlaylistDetailFragment", "Songs loaded: " + songsMap.size());
+                }
 
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+                    Log.e("PlaylistDetailFragment", "Error loading songs: " + databaseError.getMessage());
+                    Toast.makeText(getContext(), "Failed to load songs", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+    }
     private void setupAddSongButton() {
         FirebaseUser user = firebaseAuth.getCurrentUser();
         if (user != null && user.getUid().equals(creatorId)) {
@@ -204,7 +234,7 @@ public class PlaylistDetailFragment extends Fragment {
         }
 
         if (playlist == null || playlistId == null) {
-            Log.e("AddSong", "Error: Playlist not loaded. Playlist or playlistId is null.");
+            Log.e("AddSong", "Error: Playlist not loaded");
             Toast.makeText(getContext(), "Error: Playlist not loaded", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -216,7 +246,7 @@ public class PlaylistDetailFragment extends Fragment {
             return;
         }
 
-        DatabaseReference playlistRef = databaseReference.child("users").child(creatorId).child("playlists").child(playlistId);
+        DatabaseReference playlistRef = databaseReference.child("playlists").child(playlistId);
         String songId = playlistRef.child("songs").push().getKey();
         if (songId == null) {
             Log.e("AddSong", "Error: Failed to generate song ID");
@@ -228,26 +258,19 @@ public class PlaylistDetailFragment extends Fragment {
         Log.d("AddSong", "Attempting to save song to Firebase: " + newSong.getName());
 
         Map<String, Object> updates = new HashMap<>();
-        updates.put("songs/" + songId, newSong.toMap());
+        updates.put("songs/" + songId, newSong);
         updates.put("songCount", playlist.getSongCount() + 1);
 
         playlistRef.updateChildren(updates)
                 .addOnSuccessListener(aVoid -> {
                     Log.d("AddSong", "Song saved successfully in Firebase");
-
                     if (playlist.getSongs() == null) {
-                        Log.d("AddSong", "Playlist songs list is null, initializing...");
-                        playlist.setSongs(new ArrayList<>());
+                        playlist.setSongs(new HashMap<>());
                     }
-
-                    playlist.getSongs().add(newSong);
+                    playlist.getSongs().put(newSong.getId(), newSong);
                     playlist.setSongCount(playlist.getSongCount() + 1);
-                    Log.d("AddSong", "Song added to local playlist");
-
-                    int newSongPosition = playlist.getSongs().size() - 1;
-                    songAdapter.notifyItemInserted(newSongPosition);
-                    Log.d("AddSong", "UI updated successfully after adding song.");
-
+                    songAdapter.setSongs(new ArrayList<>(playlist.getSongs().values()));
+                    songAdapter.notifyDataSetChanged();
                     Toast.makeText(getContext(), "Song added successfully", Toast.LENGTH_SHORT).show();
                 })
                 .addOnFailureListener(e -> {
@@ -256,69 +279,49 @@ public class PlaylistDetailFragment extends Fragment {
                 });
     }
 
-
-
-
-
-    private void loadPlaylistData() {
-        showLoading(true);
-        Log.d("PlaylistDetailFragment", "Starting to load playlist data for ID: " + playlistId);
-
-        if (playlistId != null && creatorId != null) {
-            String path = "users/" + creatorId + "/playlists/" + playlistId;
-            Log.d("PlaylistDetailFragment", "Attempting to load from path: " + path);
-
-            databaseReference.child(path).addListenerForSingleValueEvent(new ValueEventListener() {
-                @Override
-                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                    Log.d("PlaylistDetailFragment", "Data snapshot received. Exists: " + dataSnapshot.exists());
-                    if (dataSnapshot.exists()) {
-                        String name = dataSnapshot.child("name").getValue(String.class);
-                        String description = dataSnapshot.child("description").getValue(String.class);
-                        String imageUrl = dataSnapshot.child("imageUrl").getValue(String.class);
-                        Long songCountLong = dataSnapshot.child("songCount").getValue(Long.class);
-                        int songCount = songCountLong != null ? songCountLong.intValue() : 0;
-
-                        List<Song> songs = new ArrayList<>();
-                        DataSnapshot songsSnapshot = dataSnapshot.child("songs");
-                        if (songsSnapshot.exists()) {
-                            for (DataSnapshot songSnapshot : songsSnapshot.getChildren()) {
-                                Song song = songSnapshot.getValue(Song.class);
-                                if (song != null) {
-                                    songs.add(song);
-                                }
-                            }
-                        }
-
-                        playlist = new Playlist(playlistId, name, description, songCount, imageUrl, songs, creatorId);
-                        Log.d("PlaylistDetailFragment", "Playlist loaded successfully: " + playlist.getName());
-                        Log.d("PlaylistDetailFragment", "Songs loaded: " + songs.size());
-
-                        binding.addSongButton.setEnabled(true);
-                        updateUI();
-                    } else {
-                        Log.d("PlaylistDetailFragment", "Playlist not found for ID: " + playlistId);
-                        Toast.makeText(getContext(), "Playlist not found", Toast.LENGTH_SHORT).show();
-                    }
-                    showLoading(false);
-                }
-
-                @Override
-                public void onCancelled(@NonNull DatabaseError databaseError) {
-                    Log.e("PlaylistDetailFragment", "Database error: " + databaseError.getMessage(), databaseError.toException());
-                    Toast.makeText(getContext(), "Failed to load playlist: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
-                    showLoading(false);
-                }
-            });
-        } else {
-            Log.e("PlaylistDetailFragment", "Playlist ID or Creator ID is null");
-            Toast.makeText(getContext(), "Playlist ID or Creator ID is null", Toast.LENGTH_SHORT).show();
-            showLoading(false);
-        }
+    private void showDeleteSongDialog(Song song) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Delete Song")
+                .setMessage("Are you sure you want to delete this song?")
+                .setPositiveButton("Delete", (dialog, which) -> deleteSongFromPlaylist(song))
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
+    private void deleteSongFromPlaylist(Song song) {
+        if (playlist == null || playlistId == null) {
+            Toast.makeText(getContext(), "Playlist not loaded", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user == null || !user.getUid().equals(creatorId)) {
+            Toast.makeText(getContext(), "Only the playlist creator can delete songs", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
+        DatabaseReference songRef = databaseReference
+                .child("playlists")
+                .child(playlistId)
+                .child("songs")
+                .child(song.getId());
+
+        songRef.removeValue().addOnSuccessListener(aVoid -> {
+            playlist.getSongs().remove(song.getId());
+            playlist.setSongCount(playlist.getSongCount() - 1);
+            songAdapter.setSongs(new ArrayList<>(playlist.getSongs().values()));
+            songAdapter.notifyDataSetChanged();
+            updatePlaylistSongCount();
+            Toast.makeText(getContext(), "Song deleted", Toast.LENGTH_SHORT).show();
+        }).addOnFailureListener(e -> {
+            Toast.makeText(getContext(), "Failed to delete song: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    private void updatePlaylistSongCount() {
+        DatabaseReference playlistRef = databaseReference.child("playlists").child(playlistId);
+        playlistRef.child("songCount").setValue(playlist.getSongCount());
+    }
 
     private void updateUI() {
         if (playlist != null && binding != null) {
@@ -335,11 +338,9 @@ public class PlaylistDetailFragment extends Fragment {
             } else {
                 binding.playlistImage.setImageResource(R.drawable.default_playlist_image);
             }
-
-            songAdapter.setSongs(playlist.getSongs());
-            songAdapter.notifyDataSetChanged();
         }
     }
+
     private void showLoading(boolean isLoading) {
         binding.loadingProgressBar.setVisibility(isLoading ? View.VISIBLE : View.GONE);
     }
@@ -354,7 +355,9 @@ public class PlaylistDetailFragment extends Fragment {
     public void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putString("playlistId", playlistId);
-        outState.putParcelableArrayList("songs", new ArrayList<>(playlist.getSongs()));
+        if (playlist != null && playlist.getSongs() != null) {
+            outState.putSerializable("songs", new HashMap<>(playlist.getSongs()));
+        }
     }
 
     @Override
@@ -362,14 +365,11 @@ public class PlaylistDetailFragment extends Fragment {
         super.onViewStateRestored(savedInstanceState);
         if (savedInstanceState != null) {
             playlistId = savedInstanceState.getString("playlistId");
-            List<Song> songs = savedInstanceState.getParcelableArrayList("songs");
-            if (songs != null) {
+            Map<String, Song> songs = (Map<String, Song>) savedInstanceState.getSerializable("songs");
+            if (songs != null && playlist != null) {
                 playlist.setSongs(songs);
-                songAdapter.setSongs(songs);
+                songAdapter.setSongs(new ArrayList<>(songs.values()));
             }
         }
     }
-
-
-
 }

@@ -6,13 +6,15 @@ public class User {
     private String email;
     private String description;
     private String profileImageUrl;
+    private String nameLowerCase;
 
     public User() {
+        // Default constructor required for calls to DataSnapshot.getValue(User.class)
     }
 
     public User(String id, String name, String email, String description, String profileImageUrl) {
         this.id = id;
-        this.name = name;
+        setName(name);
         this.email = email;
         this.description = description;
         this.profileImageUrl = profileImageUrl;
@@ -32,6 +34,15 @@ public class User {
 
     public void setName(String name) {
         this.name = name;
+        this.nameLowerCase = name.toLowerCase();
+    }
+
+    public String getNameLowerCase() {
+        return nameLowerCase;
+    }
+
+    public void setNameLowerCase(String nameLowerCase) {
+        this.nameLowerCase = nameLowerCase;
     }
 
     public String getEmail() {

@@ -1,7 +1,5 @@
 package com.example.beatflow.fragments;
 
-
-
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
@@ -36,6 +34,7 @@ import com.example.beatflow.PlaylistAdapter;
 import com.example.beatflow.R;
 import com.example.beatflow.Data.Playlist;
 import com.example.beatflow.Data.User;
+import com.example.beatflow.Data.UserPlaylist;
 import com.example.beatflow.databinding.FragmentProfileBinding;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -43,6 +42,8 @@ import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.MutableData;
+import com.google.firebase.database.Transaction;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
@@ -64,11 +65,8 @@ public class ProfileFragment extends Fragment {
 
     private static RecyclerView.RecycledViewPool sharedPool = new RecyclerView.RecycledViewPool();
 
-
     private Uri selectedImageUri = null;
     private AlertDialog currentDialog;
-
-
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -78,11 +76,11 @@ public class ProfileFragment extends Fragment {
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-                        selectedPlaylistImageUri = result.getData().getData();
+                        selectedImageUri = result.getData().getData();
                         if (currentDialog != null && currentDialog.isShowing()) {
                             ImageView playlistImagePreview = currentDialog.findViewById(R.id.playlist_image_preview);
                             if (playlistImagePreview != null) {
-                                playlistImagePreview.setImageURI(selectedPlaylistImageUri);
+                                playlistImagePreview.setImageURI(selectedImageUri);
                             }
                         }
                     }
@@ -98,14 +96,12 @@ public class ProfileFragment extends Fragment {
         return binding.getRoot();
     }
 
-
-
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         setupUserInfo();
         setupPlaylistRecyclerView();
-        loadPlaylists();
+
         setupEditProfileButton();
 
         requireActivity().getOnBackPressedDispatcher().addCallback(getViewLifecycleOwner(),
@@ -119,7 +115,6 @@ public class ProfileFragment extends Fragment {
                 });
     }
 
-
     private void initFirebase() {
         firebaseAuth = FirebaseAuth.getInstance();
         databaseReference = FirebaseDatabase.getInstance().getReference();
@@ -131,36 +126,28 @@ public class ProfileFragment extends Fragment {
         FirebaseUser user = firebaseAuth.getCurrentUser();
         if (user != null) {
             String uid = user.getUid();
-            new Thread(() -> {
-                databaseReference.child("users").child(uid).addListenerForSingleValueEvent(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                        if (dataSnapshot.exists()) {
-                            String name = dataSnapshot.child("name").getValue(String.class);
-                            String description = dataSnapshot.child("description").getValue(String.class);
-                            String profileImageUrl = dataSnapshot.child("profileImageUrl").getValue(String.class);
-
-                            currentUser = new User(uid, name, user.getEmail(), description, profileImageUrl);
-
-                            requireActivity().runOnUiThread(() -> {
-                                if (name != null) binding.userName.setText(name);
-                                if (description != null) binding.userDescription.setText(description);
-                                if (profileImageUrl != null) loadProfileImage(profileImageUrl);
-                            });
-                        } else {
-                            Log.w("ProfileFragment", "No user data found for UID: " + uid);
+            databaseReference.child("users").child(uid).addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    if (dataSnapshot.exists()) {
+                        currentUser = dataSnapshot.getValue(User.class);
+                        if (currentUser != null) {
+                            binding.userName.setText(currentUser.getName());
+                            binding.userDescription.setText(currentUser.getDescription());
+                            loadProfileImage(currentUser.getProfileImageUrl());
+                            loadPlaylists(); // Load playlists after user info is set up
                         }
+                    } else {
+                        Log.w("ProfileFragment", "No user data found for UID: " + uid);
                     }
+                }
 
-                    @Override
-                    public void onCancelled(@NonNull DatabaseError databaseError) {
-                        requireActivity().runOnUiThread(() -> {
-                            Toast.makeText(requireContext(), "Failed to load user data.", Toast.LENGTH_SHORT).show();
-                        });
-                        Log.e("ProfileFragment", "Error loading user data", databaseError.toException());
-                    }
-                });
-            }).start();
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+                    Toast.makeText(requireContext(), "Failed to load user data.", Toast.LENGTH_SHORT).show();
+                    Log.e("ProfileFragment", "Error loading user data", databaseError.toException());
+                }
+            });
         }
     }
 
@@ -179,9 +166,6 @@ public class ProfileFragment extends Fragment {
     private void setupEditProfileButton() {
         binding.fab.setOnClickListener(v -> showEditOptionsDialog());
     }
-
-    private Uri selectedPlaylistImageUri = null;
-
     public void showCreatePlaylistDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_create_playlist, null);
@@ -199,7 +183,7 @@ public class ProfileFragment extends Fragment {
                 .setPositiveButton("Create", (dialog, id) -> {
                     String playlistName = playlistNameInput.getText().toString();
                     String playlistDescription = playlistDescriptionInput.getText().toString();
-                    createNewPlaylist(playlistName, playlistDescription, selectedPlaylistImageUri);
+                    createNewPlaylist(playlistName, playlistDescription, selectedImageUri);
                 })
                 .setNegativeButton("Cancel", null);
 
@@ -217,9 +201,14 @@ public class ProfileFragment extends Fragment {
                         imageRef.getDownloadUrl().addOnSuccessListener(uri -> {
                             String imageUrl = uri.toString();
                             savePlaylistToDatabase(playlistId, name, description, imageUrl);
+                        }).addOnFailureListener(e -> {
+                            Log.e("PlaylistCreation", "Failed to get download URL: " + e.getMessage());
+                            Toast.makeText(requireContext(), "Failed to get image URL: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            savePlaylistToDatabase(playlistId, name, description, null);
                         });
                     })
                     .addOnFailureListener(e -> {
+                        Log.e("PlaylistCreation", "Failed to upload image: " + e.getMessage());
                         Toast.makeText(requireContext(), "Failed to upload image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                         savePlaylistToDatabase(playlistId, name, description, null);
                     });
@@ -229,19 +218,26 @@ public class ProfileFragment extends Fragment {
     }
 
     private void savePlaylistToDatabase(String playlistId, String name, String description, String imageUrl) {
-        Playlist newPlaylist = new Playlist(playlistId, name, description, 0, imageUrl, new ArrayList<>(), firebaseAuth.getCurrentUser().getUid());
-
         FirebaseUser user = firebaseAuth.getCurrentUser();
         if (user != null) {
-            DatabaseReference playlistRef = databaseReference.child("users")
-                    .child(user.getUid())
-                    .child("playlists")
-                    .child(playlistId);
+            String userId = user.getUid();
+            Playlist newPlaylist = new Playlist(playlistId, name, description, imageUrl, userId);
 
+            DatabaseReference playlistRef = databaseReference.child("playlists").child(playlistId);
             playlistRef.setValue(newPlaylist)
                     .addOnSuccessListener(aVoid -> {
-                        Toast.makeText(requireContext(), "Playlist created successfully", Toast.LENGTH_SHORT).show();
-                        loadPlaylists();
+                        UserPlaylist userPlaylist = new UserPlaylist(userId, playlistId, System.currentTimeMillis());
+                        DatabaseReference userPlaylistRef = databaseReference.child("userPlaylists").child(userId).child(playlistId);
+                        userPlaylistRef.setValue(userPlaylist)
+                                .addOnSuccessListener(aVoid1 -> {
+                                    Toast.makeText(requireContext(), "Playlist created successfully", Toast.LENGTH_SHORT).show();
+                                    loadPlaylists();
+                                })
+                                .addOnFailureListener(e -> {
+                                    Log.e("ProfileFragment", "Failed to create user-playlist link: " + e.getMessage());
+                                    Toast.makeText(requireContext(), "Failed to link playlist to user", Toast.LENGTH_SHORT).show();
+                                    deletePlaylist(playlistId);
+                                });
                     })
                     .addOnFailureListener(e -> {
                         Log.e("ProfileFragment", "Failed to create playlist: " + e.getMessage());
@@ -253,7 +249,11 @@ public class ProfileFragment extends Fragment {
         }
     }
 
-
+    private void deletePlaylist(String playlistId) {
+        DatabaseReference playlistRef = databaseReference.child("playlists").child(playlistId);
+        playlistRef.removeValue()
+                .addOnFailureListener(e -> Log.e("ProfileFragment", "Failed to delete playlist after link failure: " + e.getMessage()));
+    }
 
     private void showEditOptionsDialog() {
         Context context = getContext();
@@ -267,9 +267,7 @@ public class ProfileFragment extends Fragment {
                 } else if (which == 1) {
                     showEditProfileDialog();
                 } else if (which == 2) {
-
                     firebaseAuth.signOut();
-
                     Intent intent = new Intent(context, MainActivity.class);
                     intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                     startActivity(intent);
@@ -288,8 +286,6 @@ public class ProfileFragment extends Fragment {
             requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
         }
     }
-
-
 
     private void showEditProfileDialog() {
         if (currentUser == null) {
@@ -324,6 +320,7 @@ public class ProfileFragment extends Fragment {
         if (user != null) {
             DatabaseReference userRef = databaseReference.child("users").child(user.getUid());
             userRef.child("name").setValue(name);
+            userRef.child("nameLowerCase").setValue(name.toLowerCase());
             userRef.child("description").setValue(description)
                     .addOnSuccessListener(aVoid -> {
                         binding.userName.setText(name);
@@ -334,23 +331,11 @@ public class ProfileFragment extends Fragment {
         }
     }
 
-
-
     private void setupPlaylistRecyclerView() {
         playlistAdapter = new PlaylistAdapter(
                 new ArrayList<>(),
-                new PlaylistAdapter.OnPlaylistClickListener() {
-                    @Override
-                    public void onPlaylistClick(Playlist playlist) {
-                        handlePlaylistSelection(playlist);
-                    }
-                },
-                new PlaylistAdapter.OnPlaylistLongClickListener() {
-                    @Override
-                    public boolean onPlaylistLongClick(Playlist playlist) {
-                        return handlePlaylistLongClick(playlist);
-                    }
-                }
+                this::handlePlaylistSelection,
+                this::handlePlaylistLongClick
         );
         binding.playlistsRecyclerView.setLayoutManager(new GridLayoutManager(requireContext(), 2));
         binding.playlistsRecyclerView.setAdapter(playlistAdapter);
@@ -367,6 +352,7 @@ public class ProfileFragment extends Fragment {
                 .show();
         return true;
     }
+
     private void deletePlaylist(Playlist playlist) {
         FirebaseUser user = firebaseAuth.getCurrentUser();
         if (user == null) {
@@ -374,96 +360,119 @@ public class ProfileFragment extends Fragment {
             return;
         }
 
-        DatabaseReference playlistRef = databaseReference
-                .child("users")
-                .child(user.getUid())
-                .child("playlists")
-                .child(playlist.getId());
+        String userId = user.getUid();
+        String playlistId = playlist.getId();
 
-        playlistRef.removeValue()
-                .addOnSuccessListener(aVoid -> {
+        DatabaseReference playlistRef = databaseReference.child("playlists").child(playlistId);
+        DatabaseReference userPlaylistRef = databaseReference.child("userPlaylists").child(userId).child(playlistId);
+
+        databaseReference.runTransaction(new Transaction.Handler() {
+            @NonNull
+            @Override
+            public Transaction.Result doTransaction(@NonNull MutableData mutableData) {
+                mutableData.child("playlists").child(playlistId).setValue(null);
+                mutableData.child("userPlaylists").child(userId).child(playlistId).setValue(null);
+                return Transaction.success(mutableData);
+            }
+
+            @Override
+            public void onComplete(@Nullable DatabaseError databaseError, boolean committed, @Nullable DataSnapshot dataSnapshot) {
+                if (committed) {
                     playlistAdapter.removePlaylist(playlist);
                     playlistAdapter.notifyDataSetChanged();
                     Toast.makeText(requireContext(), "Playlist deleted", Toast.LENGTH_SHORT).show();
-                })
-                .addOnFailureListener(e -> {
-                    Toast.makeText(requireContext(), "Failed to delete playlist: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
+                } else {
+                    Toast.makeText(requireContext(), "Failed to delete playlist", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
     }
-
-
-
-
 
     private void loadPlaylists() {
         binding.playlistsProgressBar.setVisibility(View.VISIBLE);
         binding.playlistsRecyclerView.setVisibility(View.GONE);
         FirebaseUser user = firebaseAuth.getCurrentUser();
         if (user != null) {
-            databaseReference.child("users").child(user.getUid()).child("playlists").addListenerForSingleValueEvent(new ValueEventListener() {
+            String userId = user.getUid();
+            databaseReference.child("userPlaylists").child(userId).addListenerForSingleValueEvent(new ValueEventListener() {
                 @Override
                 public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                    ArrayList<Playlist> playlists = new ArrayList<>();
-                    for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
-                        String id = snapshot.getKey();
-                        String name = snapshot.child("name").getValue(String.class);
-                        String description = snapshot.child("description").getValue(String.class);
-                        Long songCountLong = snapshot.child("songCount").getValue(Long.class);
-                        int songCount = songCountLong != null ? songCountLong.intValue() : 0;
-                        String imageUrl = snapshot.child("imageUrl").getValue(String.class);
-                        String creatorId = snapshot.child("creatorId").getValue(String.class);
-
-                        List<Song> songs = new ArrayList<>();
-                        DataSnapshot songsSnapshot = snapshot.child("songs");
-                        if (songsSnapshot.exists()) {
-                            for (DataSnapshot songSnapshot : songsSnapshot.getChildren()) {
-                                Song song = songSnapshot.getValue(Song.class);
-                                if (song != null) {
-                                    songs.add(song);
-                                }
-                            }
+                    List<Playlist> playlists = new ArrayList<>();
+                    long totalPlaylists = dataSnapshot.getChildrenCount();
+                    if (totalPlaylists > 0) {
+                        for (DataSnapshot playlistSnapshot : dataSnapshot.getChildren()) {
+                            String playlistId = playlistSnapshot.getKey();
+                            loadPlaylistDetails(playlistId, playlists, totalPlaylists);
                         }
-
-                        Playlist playlist = new Playlist(id, name, description, songCount, imageUrl, songs, creatorId);
-                        playlists.add(playlist);
+                    } else {
+                        showNoPlaylists();
                     }
-                    requireActivity().runOnUiThread(() -> {
-                        playlistAdapter.setPlaylists(playlists);
-                        binding.playlistsProgressBar.setVisibility(View.GONE);
-                        binding.playlistsRecyclerView.setVisibility(View.VISIBLE);
-                        binding.noPlaylistsText.setVisibility(playlists.isEmpty() ? View.VISIBLE : View.GONE);
-                    });
                 }
 
                 @Override
                 public void onCancelled(@NonNull DatabaseError databaseError) {
-                    requireActivity().runOnUiThread(() -> {
-                        binding.playlistsProgressBar.setVisibility(View.GONE);
-                        binding.playlistsRecyclerView.setVisibility(View.GONE);
-                        binding.noPlaylistsText.setVisibility(View.VISIBLE);
-                        binding.noPlaylistsText.setText("Failed to load playlists");
-                        Toast.makeText(requireContext(), "Failed to load playlists: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
-                    });
+                    Log.e("ProfileFragment", "Error loading user playlists", databaseError.toException());
+                    showNoPlaylists();
                 }
             });
         } else {
-            binding.playlistsProgressBar.setVisibility(View.GONE);
-            binding.noPlaylistsText.setVisibility(View.VISIBLE);
-            binding.noPlaylistsText.setText("User not logged in");
+            showUserNotLoggedIn();
         }
     }
 
+
+    private void loadPlaylistDetails(String playlistId, List<Playlist> playlists, long totalPlaylists) {
+        databaseReference.child("playlists").child(playlistId).addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                Playlist playlist = dataSnapshot.getValue(Playlist.class);
+                if (playlist != null) {
+                    playlists.add(playlist);
+                    if (playlists.size() == totalPlaylists) {
+                        updateUI(playlists);
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+                Log.e("ProfileFragment", "Error loading playlist details", databaseError.toException());
+            }
+        });
+    }
+
+    private void updateUI(List<Playlist> playlists) {
+        requireActivity().runOnUiThread(() -> {
+            playlistAdapter.setPlaylists(playlists);
+            binding.playlistsProgressBar.setVisibility(View.GONE);
+            binding.playlistsRecyclerView.setVisibility(View.VISIBLE);
+            binding.noPlaylistsText.setVisibility(playlists.isEmpty() ? View.VISIBLE : View.GONE);
+        });
+    }
+
+    private void showNoPlaylists() {
+        binding.playlistsProgressBar.setVisibility(View.GONE);
+        binding.playlistsRecyclerView.setVisibility(View.GONE);
+        binding.noPlaylistsText.setVisibility(View.VISIBLE);
+        binding.noPlaylistsText.setText("No playlists found");
+    }
+
+    private void showUserNotLoggedIn() {
+        binding.playlistsProgressBar.setVisibility(View.GONE);
+        binding.noPlaylistsText.setVisibility(View.VISIBLE);
+        binding.noPlaylistsText.setText("User not logged in");
+    }
 
     private void handlePlaylistSelection(Playlist playlist) {
         PlaylistDetailFragment detailFragment = PlaylistDetailFragment.newInstance(playlist.getCreatorId(), playlist.getId());
         ((MainActivity) requireActivity()).loadFragment(detailFragment, "playlist_detail");
     }
 
+
+
     @Override
     public void onDestroyView() {
         super.onDestroyView();
         binding = null;
     }
-
-
 }
