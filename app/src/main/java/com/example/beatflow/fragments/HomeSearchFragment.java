@@ -30,6 +30,7 @@ import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 import java.util.List;
+import androidx.recyclerview.widget.DividerItemDecoration;
 
 public class HomeSearchFragment extends Fragment {
 
@@ -57,28 +58,37 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void setupRecyclerViews() {
+        // Initialize PlaylistAdapter
         playlistAdapter = new PlaylistAdapter(
                 new ArrayList<>(),
-                new PlaylistAdapter.OnPlaylistClickListener() {
-                    @Override
-                    public void onPlaylistClick(Playlist playlist) {
-                        HomeSearchFragment.this.onPlaylistClick(playlist);
-                    }
-                },
-                new PlaylistAdapter.OnPlaylistLongClickListener() {
-                    @Override
-                    public boolean onPlaylistLongClick(Playlist playlist) {
-                        return false; // או כל לוגיקה אחרת שתרצה ללחיצה ארוכה
-                    }
+                this::onPlaylistClick,
+                playlist -> {
+                    // Handle long click if needed
+                    Log.d("HomeSearchFragment", "Playlist long clicked: " + playlist.getName());
+                    return true;
                 }
         );
+
+        // Initialize UserAdapter
         userAdapter = new UserAdapter(new ArrayList<>(), this::onUserClick);
 
+        // Setup RecyclerView for Playlists
         binding.recyclerViewPlaylists.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.recyclerViewPlaylists.setAdapter(playlistAdapter);
+        binding.recyclerViewPlaylists.setHasFixedSize(true);
 
+        // Setup RecyclerView for Users
         binding.recyclerViewUsers.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.recyclerViewUsers.setAdapter(userAdapter);
+        binding.recyclerViewUsers.setHasFixedSize(true);
+
+        // Add item decoration for better visual separation (optional)
+        int verticalSpaceHeight = getResources().getDimensionPixelSize(R.dimen.item_vertical_space);
+        DividerItemDecoration itemDecoration = new DividerItemDecoration(requireContext(), DividerItemDecoration.VERTICAL);
+        binding.recyclerViewPlaylists.addItemDecoration(itemDecoration);
+        binding.recyclerViewUsers.addItemDecoration(itemDecoration);
+
+        Log.d("HomeSearchFragment", "RecyclerViews setup completed");
     }
 
 
@@ -120,63 +130,83 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void searchUsers(String query) {
-        databaseRef.child("users").addListenerForSingleValueEvent(new ValueEventListener() {
+        Query searchQuery = databaseRef.child("users").orderByChild("nameLowerCase").startAt(query.toLowerCase()).endAt(query.toLowerCase() + "\uf8ff");
+        searchQuery.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                 List<User> users = new ArrayList<>();
-                String lowercaseQuery = query.toLowerCase();
                 for (DataSnapshot userSnapshot : dataSnapshot.getChildren()) {
                     User user = userSnapshot.getValue(User.class);
                     if (user != null) {
                         user.setId(userSnapshot.getKey());
-                        // בדיקה אם שם המשתמש מכיל את מחרוזת החיפוש
-                        if (user.getName().toLowerCase().contains(lowercaseQuery)) {
-                            users.add(user);
-                            Log.d("HomeSearchFragment", "Found user: " + user.getName() + " with ID: " + user.getId());
-                        }
+                        users.add(user);
+                        Log.d("HomeSearchFragment", "Found user: " + user.getName() + " with ID: " + user.getId());
                     }
                 }
                 userAdapter.setUsers(users);
                 updateEmptyView(users.isEmpty());
                 Log.d("HomeSearchFragment", "Total users found: " + users.size());
+
+                // עדכון ה-UI באופן מפורש
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        binding.recyclerViewUsers.setVisibility(View.VISIBLE);
+                        binding.recyclerViewPlaylists.setVisibility(View.GONE);
+                        userAdapter.notifyDataSetChanged();
+                    });
+                }
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError databaseError) {
                 Log.e("HomeSearchFragment", "Error searching users: " + databaseError.getMessage());
-                Toast.makeText(getContext(), "Error searching users. Please try again.", Toast.LENGTH_SHORT).show();
-                updateEmptyView(true);
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Error searching users. Please try again.", Toast.LENGTH_SHORT).show();
+                        updateEmptyView(true);
+                    });
+                }
             }
         });
     }
 
     private void searchPlaylists(String query) {
-        databaseRef.child("playlists").addListenerForSingleValueEvent(new ValueEventListener() {
+        Query searchQuery = databaseRef.child("playlists").orderByChild("nameLowerCase").startAt(query.toLowerCase()).endAt(query.toLowerCase() + "\uf8ff");
+        searchQuery.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                 List<Playlist> playlists = new ArrayList<>();
-                String lowercaseQuery = query.toLowerCase();
                 for (DataSnapshot playlistSnapshot : dataSnapshot.getChildren()) {
                     Playlist playlist = playlistSnapshot.getValue(Playlist.class);
                     if (playlist != null) {
                         playlist.setId(playlistSnapshot.getKey());
-                        // בדיקה אם שם הפלייליסט מכיל את מחרוזת החיפוש
-                        if (playlist.getName().toLowerCase().contains(lowercaseQuery)) {
-                            playlists.add(playlist);
-                            Log.d("HomeSearchFragment", "Found playlist: " + playlist.getName() + " with ID: " + playlist.getId());
-                        }
+                        playlists.add(playlist);
+                        Log.d("HomeSearchFragment", "Found playlist: " + playlist.getName() + " with ID: " + playlist.getId());
                     }
                 }
                 playlistAdapter.setPlaylists(playlists);
                 updateEmptyView(playlists.isEmpty());
                 Log.d("HomeSearchFragment", "Total playlists found: " + playlists.size());
+
+                // עדכון ה-UI באופן מפורש
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        binding.recyclerViewPlaylists.setVisibility(View.VISIBLE);
+                        binding.recyclerViewUsers.setVisibility(View.GONE);
+                        playlistAdapter.notifyDataSetChanged();
+                    });
+                }
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError databaseError) {
                 Log.e("HomeSearchFragment", "Error searching playlists: " + databaseError.getMessage());
-                Toast.makeText(getContext(), "Error searching playlists. Please try again.", Toast.LENGTH_SHORT).show();
-                updateEmptyView(true);
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Error searching playlists. Please try again.", Toast.LENGTH_SHORT).show();
+                        updateEmptyView(true);
+                    });
+                }
             }
         });
     }
@@ -189,13 +219,20 @@ public class HomeSearchFragment extends Fragment {
 
     private void updateEmptyView(boolean isEmpty) {
         binding.textViewNoResults.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
-        binding.recyclerViewUsers.setVisibility(binding.radioButtonUsers.isChecked() && !isEmpty ? View.VISIBLE : View.GONE);
-        binding.recyclerViewPlaylists.setVisibility(binding.radioButtonPlaylists.isChecked() && !isEmpty ? View.VISIBLE : View.GONE);
 
-        // הוסף לוג כדי לראות מתי ואיך המצב משתנה
+        if (binding.radioButtonUsers.isChecked()) {
+            binding.recyclerViewUsers.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
+            binding.recyclerViewPlaylists.setVisibility(View.GONE);
+        } else {
+            binding.recyclerViewPlaylists.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
+            binding.recyclerViewUsers.setVisibility(View.GONE);
+        }
+
         Log.d("HomeSearchFragment", "Updating empty view. isEmpty: " + isEmpty +
                 ", Users checked: " + binding.radioButtonUsers.isChecked() +
-                ", Playlists checked: " + binding.radioButtonPlaylists.isChecked());
+                ", Playlists checked: " + binding.radioButtonPlaylists.isChecked() +
+                ", Users visibility: " + binding.recyclerViewUsers.getVisibility() +
+                ", Playlists visibility: " + binding.recyclerViewPlaylists.getVisibility());
     }
 
     private void onUserClick(User user) {

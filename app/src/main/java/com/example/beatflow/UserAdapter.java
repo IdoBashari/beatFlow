@@ -41,8 +41,13 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
 
     @Override
     public void onBindViewHolder(@NonNull UserViewHolder holder, int position) {
-        User user = users.get(position);
-        holder.bind(user, clickListener);
+        if (users != null && position < users.size()) {
+            User user = users.get(position);
+            holder.bind(user, clickListener);
+            Log.d("UserAdapter", "Binding user at position " + position + ": " + user.getName());
+        } else {
+            Log.e("UserAdapter", "Invalid position or users list is null");
+        }
     }
 
     @Override
