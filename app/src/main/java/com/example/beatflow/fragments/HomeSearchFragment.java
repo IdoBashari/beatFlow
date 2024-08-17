@@ -14,7 +14,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
-import com.example.beatflow.Data.Song;
+
 import com.example.beatflow.PlaylistAdapter;
 import com.example.beatflow.R;
 import com.example.beatflow.UserAdapter;
@@ -135,10 +135,12 @@ public class HomeSearchFragment extends Fragment {
                     if (user != null) {
                         user.setId(userSnapshot.getKey());
                         users.add(user);
+                        Log.d("HomeSearchFragment", "Found user: " + user.getName() + " with ID: " + user.getId());
                     }
                 }
                 userAdapter.setUsers(users);
                 updateEmptyView(users.isEmpty());
+                Log.d("HomeSearchFragment", "Total users found: " + users.size());
             }
 
             @Override
@@ -166,15 +168,19 @@ public class HomeSearchFragment extends Fragment {
                     if (playlist != null) {
                         playlist.setId(playlistSnapshot.getKey());
                         playlists.add(playlist);
+                        Log.d("HomeSearchFragment", "Found playlist: " + playlist.getName() + " with ID: " + playlist.getId());
                     }
                 }
                 playlistAdapter.setPlaylists(playlists);
                 updateEmptyView(playlists.isEmpty());
+                Log.d("HomeSearchFragment", "Total playlists found: " + playlists.size());
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError databaseError) {
-                Toast.makeText(getContext(), "Error searching playlists: " + databaseError.getMessage(), Toast.LENGTH_SHORT).show();
+                Log.e("HomeSearchFragment", "Error searching playlists: " + databaseError.getMessage());
+                Toast.makeText(getContext(), "Error searching playlists. Please try again.", Toast.LENGTH_SHORT).show();
+                updateEmptyView(true);
             }
         });
     }
@@ -192,6 +198,7 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void onUserClick(User user) {
+        Log.d("HomeSearchFragment", "Clicked on user: " + user.getName() + " with ID: " + user.getId());
         UserProfileFragment userProfileFragment = UserProfileFragment.newInstance(user.getId());
         requireActivity().getSupportFragmentManager().beginTransaction()
                 .replace(R.id.fragment_container, userProfileFragment)

@@ -1,6 +1,7 @@
 package com.example.beatflow.fragments;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -32,13 +33,7 @@ public class UserProfileFragment extends Fragment {
         return fragment;
     }
 
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        if (getArguments() != null) {
-            userId = getArguments().getString(ARG_USER_ID);
-        }
-    }
+
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -62,13 +57,17 @@ public class UserProfileFragment extends Fragment {
                 if (user != null) {
                     userNameTextView.setText(user.getName());
                     userEmailTextView.setText(user.getEmail());
+                    Log.d("UserProfileFragment", "Loaded user data for userID: " + userId);
+                } else {
+                    Log.e("UserProfileFragment", "User object is null for userID: " + userId);
                 }
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError databaseError) {
-                // Handle possible errors.
+                Log.e("UserProfileFragment", "Failed to load user data for userID: " + userId, databaseError.toException());
             }
         });
     }
+
 }

@@ -1,8 +1,8 @@
 package com.example.beatflow.Data;
 
-import java.util.ArrayList;
+
 import java.util.HashMap;
-import java.util.List;
+
 import java.util.Map;
 
 public class Playlist {
@@ -16,7 +16,7 @@ public class Playlist {
     private String nameLowerCase;
 
     public Playlist() {
-        // Default constructor required for calls to DataSnapshot.getValue(Playlist.class)
+
     }
 
     public Playlist(String id, String name, String description, String imageUrl, String creatorId) {

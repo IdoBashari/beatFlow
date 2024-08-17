@@ -28,7 +28,7 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
-import com.example.beatflow.Data.Song;
+
 import com.example.beatflow.MainActivity;
 import com.example.beatflow.PlaylistAdapter;
 import com.example.beatflow.R;
@@ -72,6 +72,7 @@ public class ProfileFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // האתחול הקיים של imagePickerLauncher
         imagePickerLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
@@ -86,6 +87,17 @@ public class ProfileFragment extends Fragment {
                     }
                 }
         );
+
+        // האתחול החדש של requestPermissionLauncher
+        requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+            if (isGranted) {
+                // פתח את בוחר התמונות
+                Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                imagePickerLauncher.launch(intent);
+            } else {
+                Toast.makeText(requireContext(), "Permission denied. Cannot choose image.", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Override
@@ -135,21 +147,41 @@ public class ProfileFragment extends Fragment {
                             binding.userName.setText(currentUser.getName());
                             binding.userDescription.setText(currentUser.getDescription());
                             loadProfileImage(currentUser.getProfileImageUrl());
-                            loadPlaylists(); // Load playlists after user info is set up
+                            loadPlaylists();
+                            Log.d("ProfileFragment", "User info loaded successfully for UID: " + uid);
+                        } else {
+                            handleMissingUserData(uid);
                         }
                     } else {
-                        Log.w("ProfileFragment", "No user data found for UID: " + uid);
+                        handleMissingUserData(uid);
                     }
                 }
 
                 @Override
                 public void onCancelled(@NonNull DatabaseError databaseError) {
                     Toast.makeText(requireContext(), "Failed to load user data.", Toast.LENGTH_SHORT).show();
-                    Log.e("ProfileFragment", "Error loading user data", databaseError.toException());
+                    Log.e("ProfileFragment", "Error loading user data for UID: " + uid, databaseError.toException());
                 }
             });
+        } else {
+            handleNotAuthenticatedUser();
         }
     }
+    private void handleMissingUserData(String uid) {
+        Log.w("ProfileFragment", "No user data found for UID: " + uid);
+        Toast.makeText(requireContext(), "User data not found. Please try logging in again.", Toast.LENGTH_LONG).show();
+        // אפשר להוסיף כאן לוגיקה נוספת, כמו ניווט למסך התחברות
+    }
+    private void handleNotAuthenticatedUser() {
+        Log.e("ProfileFragment", "No authenticated user found.");
+        Toast.makeText(requireContext(), "No authenticated user. Please log in.", Toast.LENGTH_LONG).show();
+        // ניווט למסך התחברות
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).loadFragment(new LoginFragment(), "login");
+        }
+    }
+
+
 
     private void loadProfileImage(String imageUrl) {
         if (imageUrl != null && !imageUrl.isEmpty()) {
@@ -184,12 +216,14 @@ public class ProfileFragment extends Fragment {
                     String playlistName = playlistNameInput.getText().toString();
                     String playlistDescription = playlistDescriptionInput.getText().toString();
                     createNewPlaylist(playlistName, playlistDescription, selectedImageUri);
+                    Log.d("ProfileFragment", "Create playlist dialog confirmed. Name: " + playlistName);
                 })
                 .setNegativeButton("Cancel", null);
 
         currentDialog = builder.create();
         currentDialog.show();
     }
+
 
     private void createNewPlaylist(String name, String description, Uri imageUri) {
         String playlistId = UUID.randomUUID().toString();
@@ -287,6 +321,7 @@ public class ProfileFragment extends Fragment {
         }
     }
 
+
     private void showEditProfileDialog() {
         if (currentUser == null) {
             Toast.makeText(requireContext(), "User data not available.", Toast.LENGTH_SHORT).show();
@@ -357,14 +392,12 @@ public class ProfileFragment extends Fragment {
         FirebaseUser user = firebaseAuth.getCurrentUser();
         if (user == null) {
             Toast.makeText(requireContext(), "User not logged in", Toast.LENGTH_SHORT).show();
+            Log.e("ProfileFragment", "User not logged in while attempting to delete playlist.");
             return;
         }
 
         String userId = user.getUid();
         String playlistId = playlist.getId();
-
-        DatabaseReference playlistRef = databaseReference.child("playlists").child(playlistId);
-        DatabaseReference userPlaylistRef = databaseReference.child("userPlaylists").child(userId).child(playlistId);
 
         databaseReference.runTransaction(new Transaction.Handler() {
             @NonNull
@@ -381,12 +414,16 @@ public class ProfileFragment extends Fragment {
                     playlistAdapter.removePlaylist(playlist);
                     playlistAdapter.notifyDataSetChanged();
                     Toast.makeText(requireContext(), "Playlist deleted", Toast.LENGTH_SHORT).show();
+                    Log.d("ProfileFragment", "Playlist deleted successfully for ID: " + playlistId);
                 } else {
                     Toast.makeText(requireContext(), "Failed to delete playlist", Toast.LENGTH_SHORT).show();
+                    Log.e("ProfileFragment", "Failed to delete playlist for ID: " + playlistId, databaseError != null ? databaseError.toException() : null);
                 }
             }
         });
     }
+
+
 
     private void loadPlaylists() {
         binding.playlistsProgressBar.setVisibility(View.VISIBLE);
@@ -407,18 +444,21 @@ public class ProfileFragment extends Fragment {
                     } else {
                         showNoPlaylists();
                     }
+                    Log.d("ProfileFragment", "Loaded user playlists for userID: " + userId);
                 }
 
                 @Override
                 public void onCancelled(@NonNull DatabaseError databaseError) {
-                    Log.e("ProfileFragment", "Error loading user playlists", databaseError.toException());
+                    Log.e("ProfileFragment", "Failed to load user playlists for userID: " + userId, databaseError.toException());
                     showNoPlaylists();
                 }
             });
         } else {
             showUserNotLoggedIn();
+            Log.e("ProfileFragment", "User is not authenticated.");
         }
     }
+
 
 
     private void loadPlaylistDetails(String playlistId, List<Playlist> playlists, long totalPlaylists) {
@@ -431,15 +471,20 @@ public class ProfileFragment extends Fragment {
                     if (playlists.size() == totalPlaylists) {
                         updateUI(playlists);
                     }
+                    Log.d("ProfileFragment", "Loaded playlist details for ID: " + playlistId);
+                } else {
+                    Log.w("ProfileFragment", "Playlist object is null for ID: " + playlistId);
                 }
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError databaseError) {
-                Log.e("ProfileFragment", "Error loading playlist details", databaseError.toException());
+                Log.e("ProfileFragment", "Failed to load playlist details for ID: " + playlistId, databaseError.toException());
             }
         });
     }
+
+
 
     private void updateUI(List<Playlist> playlists) {
         requireActivity().runOnUiThread(() -> {
@@ -447,8 +492,10 @@ public class ProfileFragment extends Fragment {
             binding.playlistsProgressBar.setVisibility(View.GONE);
             binding.playlistsRecyclerView.setVisibility(View.VISIBLE);
             binding.noPlaylistsText.setVisibility(playlists.isEmpty() ? View.VISIBLE : View.GONE);
+            Log.d("ProfileFragment", "UI updated with playlists. Total playlists: " + playlists.size());
         });
     }
+
 
     private void showNoPlaylists() {
         binding.playlistsProgressBar.setVisibility(View.GONE);
@@ -464,9 +511,15 @@ public class ProfileFragment extends Fragment {
     }
 
     private void handlePlaylistSelection(Playlist playlist) {
-        PlaylistDetailFragment detailFragment = PlaylistDetailFragment.newInstance(playlist.getCreatorId(), playlist.getId());
-        ((MainActivity) requireActivity()).loadFragment(detailFragment, "playlist_detail");
+        if (playlist != null) {
+            PlaylistDetailFragment detailFragment = PlaylistDetailFragment.newInstance(playlist.getCreatorId(), playlist.getId());
+            ((MainActivity) requireActivity()).loadFragment(detailFragment, "playlist_detail");
+            Log.d("ProfileFragment", "Playlist selected: " + playlist.getName() + ", ID: " + playlist.getId());
+        } else {
+            Log.w("ProfileFragment", "Attempted to select a null playlist.");
+        }
     }
+
 
 
 

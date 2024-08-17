@@ -98,7 +98,10 @@ public class MainActivity extends AppCompatActivity {
         }
         transaction.commit();
         currentFragmentTag = tag;
+
+        Log.d("MainActivity", "Fragment loaded with tag: " + tag);
     }
+
 
 
 
@@ -106,28 +109,25 @@ public class MainActivity extends AppCompatActivity {
         Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
         if (currentFragment instanceof ProfileFragment) {
             ((ProfileFragment) currentFragment).showCreatePlaylistDialog();
+            Log.d("MainActivity", "Create playlist dialog opened from ProfileFragment.");
         } else {
-            // Load ProfileFragment and then show dialog
             ProfileFragment profileFragment = new ProfileFragment();
             getSupportFragmentManager().beginTransaction()
                     .replace(R.id.fragment_container, profileFragment)
                     .addToBackStack(null)
                     .commit();
 
-            // Wait for the fragment transaction to complete
             getSupportFragmentManager().executePendingTransactions();
 
             profileFragment.showCreatePlaylistDialog();
+            Log.d("MainActivity", "ProfileFragment loaded, and create playlist dialog opened.");
         }
     }
 
-    public void showBottomNav() {
-        bottomNav.setVisibility(View.VISIBLE);
-    }
 
-    public void hideBottomNav() {
-        bottomNav.setVisibility(View.GONE);
-    }
+
+
+
 
     @Override
     protected void onSaveInstanceState(Bundle outState) {
