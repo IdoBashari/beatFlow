@@ -120,22 +120,20 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void searchUsers(String query) {
-        Query searchQuery = databaseRef.child("users")
-                .orderByChild("nameLowerCase")
-                .startAt(query.toLowerCase())
-                .endAt(query.toLowerCase() + "\uf8ff")
-                .limitToFirst(20);
-
-        searchQuery.addListenerForSingleValueEvent(new ValueEventListener() {
+        databaseRef.child("users").addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                 List<User> users = new ArrayList<>();
+                String lowercaseQuery = query.toLowerCase();
                 for (DataSnapshot userSnapshot : dataSnapshot.getChildren()) {
                     User user = userSnapshot.getValue(User.class);
                     if (user != null) {
                         user.setId(userSnapshot.getKey());
-                        users.add(user);
-                        Log.d("HomeSearchFragment", "Found user: " + user.getName() + " with ID: " + user.getId());
+                        // בדיקה אם שם המשתמש מכיל את מחרוזת החיפוש
+                        if (user.getName().toLowerCase().contains(lowercaseQuery)) {
+                            users.add(user);
+                            Log.d("HomeSearchFragment", "Found user: " + user.getName() + " with ID: " + user.getId());
+                        }
                     }
                 }
                 userAdapter.setUsers(users);
@@ -153,22 +151,20 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void searchPlaylists(String query) {
-        Query searchQuery = databaseRef.child("playlists")
-                .orderByChild("nameLowerCase")
-                .startAt(query.toLowerCase())
-                .endAt(query.toLowerCase() + "\uf8ff")
-                .limitToFirst(20);
-
-        searchQuery.addListenerForSingleValueEvent(new ValueEventListener() {
+        databaseRef.child("playlists").addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                 List<Playlist> playlists = new ArrayList<>();
+                String lowercaseQuery = query.toLowerCase();
                 for (DataSnapshot playlistSnapshot : dataSnapshot.getChildren()) {
                     Playlist playlist = playlistSnapshot.getValue(Playlist.class);
                     if (playlist != null) {
                         playlist.setId(playlistSnapshot.getKey());
-                        playlists.add(playlist);
-                        Log.d("HomeSearchFragment", "Found playlist: " + playlist.getName() + " with ID: " + playlist.getId());
+                        // בדיקה אם שם הפלייליסט מכיל את מחרוזת החיפוש
+                        if (playlist.getName().toLowerCase().contains(lowercaseQuery)) {
+                            playlists.add(playlist);
+                            Log.d("HomeSearchFragment", "Found playlist: " + playlist.getName() + " with ID: " + playlist.getId());
+                        }
                     }
                 }
                 playlistAdapter.setPlaylists(playlists);
@@ -195,10 +191,16 @@ public class HomeSearchFragment extends Fragment {
         binding.textViewNoResults.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
         binding.recyclerViewUsers.setVisibility(binding.radioButtonUsers.isChecked() && !isEmpty ? View.VISIBLE : View.GONE);
         binding.recyclerViewPlaylists.setVisibility(binding.radioButtonPlaylists.isChecked() && !isEmpty ? View.VISIBLE : View.GONE);
+
+        // הוסף לוג כדי לראות מתי ואיך המצב משתנה
+        Log.d("HomeSearchFragment", "Updating empty view. isEmpty: " + isEmpty +
+                ", Users checked: " + binding.radioButtonUsers.isChecked() +
+                ", Playlists checked: " + binding.radioButtonPlaylists.isChecked());
     }
 
     private void onUserClick(User user) {
         Log.d("HomeSearchFragment", "Clicked on user: " + user.getName() + " with ID: " + user.getId());
+        Toast.makeText(getContext(), "Clicked on user: " + user.getName(), Toast.LENGTH_SHORT).show();
         UserProfileFragment userProfileFragment = UserProfileFragment.newInstance(user.getId());
         requireActivity().getSupportFragmentManager().beginTransaction()
                 .replace(R.id.fragment_container, userProfileFragment)
@@ -207,6 +209,8 @@ public class HomeSearchFragment extends Fragment {
     }
 
     private void onPlaylistClick(Playlist playlist) {
+        Log.d("HomeSearchFragment", "Clicked on playlist: " + playlist.getName() + " with ID: " + playlist.getId());
+        Toast.makeText(getContext(), "Clicked on playlist: " + playlist.getName(), Toast.LENGTH_SHORT).show();
         PlaylistDetailFragment playlistDetailFragment = PlaylistDetailFragment.newInstance(playlist.getCreatorId(), playlist.getId());
         requireActivity().getSupportFragmentManager().beginTransaction()
                 .replace(R.id.fragment_container, playlistDetailFragment)

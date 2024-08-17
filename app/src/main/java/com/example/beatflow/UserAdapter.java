@@ -1,5 +1,6 @@
 package com.example.beatflow;
 
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -27,6 +28,7 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
 
     public void setUsers(List<User> users) {
         this.users = users;
+        Log.d("UserAdapter", "Setting " + users.size() + " users");
         notifyDataSetChanged();
     }
 
