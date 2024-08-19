@@ -1,6 +1,6 @@
 package com.example.beatflow;
 
-import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.Fragment;
 import android.os.Bundle;
 import android.util.Log;
@@ -14,7 +14,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import androidx.activity.OnBackPressedCallback;
 import androidx.fragment.app.FragmentTransaction;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends FragmentActivity {
     private FirebaseAuth mAuth;
     private BottomNavigationView bottomNav;
     private String currentFragmentTag;
@@ -48,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
             });
         }).start();
     }
+
     public void popBackStack() {
         if (getSupportFragmentManager().getBackStackEntryCount() > 1) {
             getSupportFragmentManager().popBackStack();
@@ -55,6 +56,7 @@ public class MainActivity extends AppCompatActivity {
             finish();
         }
     }
+
     private void setupBottomNavigation() {
         bottomNav = findViewById(R.id.bottom_navigation);
         if (bottomNav != null) {
@@ -102,9 +104,6 @@ public class MainActivity extends AppCompatActivity {
         Log.d("MainActivity", "Fragment loaded with tag: " + tag);
     }
 
-
-
-
     private void openCreatePlaylistDialog() {
         Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
         if (currentFragment instanceof ProfileFragment) {
@@ -123,11 +122,6 @@ public class MainActivity extends AppCompatActivity {
             Log.d("MainActivity", "ProfileFragment loaded, and create playlist dialog opened.");
         }
     }
-
-
-
-
-
 
     @Override
     protected void onSaveInstanceState(Bundle outState) {
@@ -148,8 +142,4 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-
-
-
 }
-

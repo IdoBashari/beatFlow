@@ -6,7 +6,7 @@ public class User {
     private String email;
     private String description;
     private String profileImageUrl;
-    private String nameLowerCase;
+
 
     public User() {
 
@@ -14,7 +14,7 @@ public class User {
 
     public User(String id, String name, String email, String description, String profileImageUrl) {
         this.id = id;
-        setName(name); // זה יטפל בבדיקת ה-null
+        this.name = name;
         this.email = email;
         this.description = description;
         this.profileImageUrl = profileImageUrl;
@@ -34,16 +34,8 @@ public class User {
 
     public void setName(String name) {
         this.name = name;
-        this.nameLowerCase = (name != null) ? name.toLowerCase() : null;
     }
 
-    public String getNameLowerCase() {
-        return nameLowerCase;
-    }
-
-    public void setNameLowerCase(String nameLowerCase) {
-        this.nameLowerCase = nameLowerCase;
-    }
 
     public String getEmail() {
         return email;

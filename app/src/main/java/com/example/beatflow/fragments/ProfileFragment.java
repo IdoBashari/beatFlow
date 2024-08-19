@@ -49,7 +49,9 @@ import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class ProfileFragment extends Fragment {
@@ -72,7 +74,6 @@ public class ProfileFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // האתחול הקיים של imagePickerLauncher
         imagePickerLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
@@ -88,10 +89,8 @@ public class ProfileFragment extends Fragment {
                 }
         );
 
-        // האתחול החדש של requestPermissionLauncher
         requestPermissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
             if (isGranted) {
-                // פתח את בוחר התמונות
                 Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
                 imagePickerLauncher.launch(intent);
             } else {
@@ -170,12 +169,10 @@ public class ProfileFragment extends Fragment {
     private void handleMissingUserData(String uid) {
         Log.w("ProfileFragment", "No user data found for UID: " + uid);
         Toast.makeText(requireContext(), "User data not found. Please try logging in again.", Toast.LENGTH_LONG).show();
-        // אפשר להוסיף כאן לוגיקה נוספת, כמו ניווט למסך התחברות
     }
     private void handleNotAuthenticatedUser() {
         Log.e("ProfileFragment", "No authenticated user found.");
         Toast.makeText(requireContext(), "No authenticated user. Please log in.", Toast.LENGTH_LONG).show();
-        // ניווט למסך התחברות
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).loadFragment(new LoginFragment(), "login");
         }
@@ -354,15 +351,23 @@ public class ProfileFragment extends Fragment {
         FirebaseUser user = firebaseAuth.getCurrentUser();
         if (user != null) {
             DatabaseReference userRef = databaseReference.child("users").child(user.getUid());
-            userRef.child("name").setValue(name);
-            userRef.child("nameLowerCase").setValue(name.toLowerCase());
-            userRef.child("description").setValue(description)
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("name", name);
+            updates.put("description", description);
+
+            userRef.updateChildren(updates)
                     .addOnSuccessListener(aVoid -> {
                         binding.userName.setText(name);
                         binding.userDescription.setText(description);
                         Toast.makeText(requireContext(), "Profile updated successfully", Toast.LENGTH_SHORT).show();
+                        currentUser.setName(name);
+                        currentUser.setDescription(description);
+                        setupUserInfo();
                     })
-                    .addOnFailureListener(e -> Toast.makeText(requireContext(), "Failed to update profile", Toast.LENGTH_SHORT).show());
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(requireContext(), "Failed to update profile: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Log.e("ProfileFragment", "Failed to update profile", e);
+                    });
         }
     }
 

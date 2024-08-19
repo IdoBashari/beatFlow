@@ -45,17 +45,20 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
             Playlist playlist = playlists.get(position);
             if (playlist != null) {
                 holder.bind(playlist, clickListener, longClickListener);
+                Log.d("PlaylistAdapter", "Binding playlist at position " + position + ": " + playlist.getName() + ", ID: " + playlist.getId());
             } else {
                 Log.e("PlaylistAdapter", "Playlist at position " + position + " is null");
             }
         } else {
-            Log.e("PlaylistAdapter", "Invalid position or playlists is null");
+            Log.e("PlaylistAdapter", "Invalid position or playlists is null. Position: " + position + ", Playlists size: " + (playlists != null ? playlists.size() : "null"));
         }
     }
 
 
+
     @Override
     public int getItemCount() {
+        Log.d("PlaylistAdapter", "Number of items in adapter: " + (playlists != null ? playlists.size() : 0));
         return playlists != null ? playlists.size() : 0;
     }
 
@@ -63,7 +66,9 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.Playli
         this.playlists = playlists;
         Log.d("PlaylistAdapter", "Setting " + playlists.size() + " playlists");
         notifyDataSetChanged();
+        Log.d("PlaylistAdapter", "Adapter data set changed.");
     }
+
 
     static class PlaylistViewHolder extends RecyclerView.ViewHolder {
         private final ImageView playlistImage;

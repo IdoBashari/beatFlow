@@ -33,7 +33,13 @@ public class UserProfileFragment extends Fragment {
         return fragment;
     }
 
-
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        if (getArguments() != null) {
+            userId = getArguments().getString(ARG_USER_ID);
+        }
+    }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -49,6 +55,10 @@ public class UserProfileFragment extends Fragment {
     }
 
     private void loadUserData() {
+        if (userId == null) {
+            Log.e("UserProfileFragment", "");
+            return;
+        }
         DatabaseReference userRef = FirebaseDatabase.getInstance().getReference("users").child(userId);
         userRef.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
@@ -57,17 +67,22 @@ public class UserProfileFragment extends Fragment {
                 if (user != null) {
                     userNameTextView.setText(user.getName());
                     userEmailTextView.setText(user.getEmail());
-                    Log.d("UserProfileFragment", "Loaded user data for userID: " + userId);
+                    Log.d("UserProfileFragment", "  " + userId + " " + user.getName());
+
+                    getView().invalidate();
                 } else {
-                    Log.e("UserProfileFragment", "User object is null for userID: " + userId);
+                    Log.e("UserProfileFragment", ": " + userId);
+                    userNameTextView.setText(R.string.no_results_found);
+                    userEmailTextView.setText("");
                 }
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError databaseError) {
-                Log.e("UserProfileFragment", "Failed to load user data for userID: " + userId, databaseError.toException());
+                Log.e("UserProfileFragment", ": " + userId, databaseError.toException());
+                userNameTextView.setText(R.string.error_updating_profile);
+                userEmailTextView.setText("");
             }
         });
     }
-
 }

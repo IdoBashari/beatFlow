@@ -13,7 +13,7 @@ public class Playlist {
     private String imageUrl;
     private Map<String, Song> songs;
     private String creatorId;
-    private String nameLowerCase;
+
 
     public Playlist() {
 
@@ -21,7 +21,7 @@ public class Playlist {
 
     public Playlist(String id, String name, String description, String imageUrl, String creatorId) {
         this.id = id;
-        setName(name);
+        this.name = name;
         this.description = description;
         this.songCount = 0;
         this.imageUrl = imageUrl;
@@ -43,16 +43,9 @@ public class Playlist {
 
     public void setName(String name) {
         this.name = name;
-        this.nameLowerCase = name.toLowerCase();
     }
 
-    public String getNameLowerCase() {
-        return nameLowerCase;
-    }
 
-    public void setNameLowerCase(String nameLowerCase) {
-        this.nameLowerCase = nameLowerCase;
-    }
 
     public String getDescription() {
         return description;
