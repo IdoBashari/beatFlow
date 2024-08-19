@@ -5,10 +5,13 @@ import androidx.fragment.app.Fragment;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.ProgressBar;
+
 import com.example.beatflow.fragments.HomeSearchFragment;
 import com.example.beatflow.fragments.LoginFragment;
 import com.example.beatflow.fragments.ProfileFragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.snackbar.Snackbar;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import androidx.activity.OnBackPressedCallback;
@@ -18,11 +21,15 @@ public class MainActivity extends FragmentActivity {
     private FirebaseAuth mAuth;
     private BottomNavigationView bottomNav;
     private String currentFragmentTag;
+    private ProgressBar progressBar;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        progressBar = findViewById(R.id.progressBar);
 
         OnBackPressedCallback callback = new OnBackPressedCallback(true) {
             @Override
@@ -38,6 +45,7 @@ public class MainActivity extends FragmentActivity {
         getOnBackPressedDispatcher().addCallback(this, callback);
 
         new Thread(() -> {
+            showProgressBar();
             FirebaseApp.initializeApp(this);
             mAuth = FirebaseAuth.getInstance();
             runOnUiThread(() -> {
@@ -45,8 +53,16 @@ public class MainActivity extends FragmentActivity {
                 if (savedInstanceState == null) {
                     loadInitialFragment();
                 }
+                hideProgressBar();
             });
         }).start();
+    }
+    private void showProgressBar() {
+        runOnUiThread(() -> progressBar.setVisibility(View.VISIBLE));
+    }
+
+    private void hideProgressBar() {
+        runOnUiThread(() -> progressBar.setVisibility(View.GONE));
     }
 
     public void popBackStack() {
@@ -94,6 +110,15 @@ public class MainActivity extends FragmentActivity {
 
     public void loadFragment(Fragment fragment, String tag) {
         FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+
+        // הוספת אנימציות מותאמות
+        transaction.setCustomAnimations(
+                R.anim.slide_in,        // Enter
+                R.anim.slide_out,       // Exit
+                R.anim.slide_in_left,   // Pop Enter
+                R.anim.slide_out_right  // Pop Exit
+        );
+
         transaction.replace(R.id.fragment_container, fragment, tag);
         if (tag != null) {
             transaction.addToBackStack(tag);
@@ -121,6 +146,9 @@ public class MainActivity extends FragmentActivity {
             profileFragment.showCreatePlaylistDialog();
             Log.d("MainActivity", "ProfileFragment loaded, and create playlist dialog opened.");
         }
+    }
+    public void showMessage(String message) {
+        Snackbar.make(findViewById(android.R.id.content), message, Snackbar.LENGTH_SHORT).show();
     }
 
     @Override

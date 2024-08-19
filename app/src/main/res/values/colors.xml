@@ -13,4 +13,10 @@
     <color name="dark_gray">#212121</color>
     <color name="bottom_nav_icon_selected">#000000</color>
     <color name="bottom_nav_icon_unselected">#757575</color>
+    <color name="background_color">#F5F5F5</color>
+    <selector xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/bottom_nav_color_selector">
+        <item android:state_checked="true" android:color="@color/primary_purple" />
+        <item android:color="@color/bottom_nav_icon_unselected" />
+
+    </selector>
 </resources>

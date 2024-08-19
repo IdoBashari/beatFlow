@@ -1,6 +1,5 @@
 package com.example.beatflow;
 
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -9,7 +8,6 @@ import android.widget.Filterable;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
@@ -19,25 +17,18 @@ import com.google.android.material.imageview.ShapeableImageView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
-public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder> {
+public class FilterableUserAdapter extends RecyclerView.Adapter<FilterableUserAdapter.UserViewHolder> implements Filterable {
 
     private List<User> allUsers;
     private List<User> filteredUsers;
     private OnUserClickListener clickListener;
 
-    public UserAdapter(List<User> users, OnUserClickListener clickListener) {
+    public FilterableUserAdapter(List<User> users, OnUserClickListener clickListener) {
         this.allUsers = new ArrayList<>(users);
         this.filteredUsers = new ArrayList<>(users);
         this.clickListener = clickListener;
-    }
-
-    public void updateUsers(List<User> newUsers) {
-        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new UserDiffCallback(this.filteredUsers, newUsers));
-        this.allUsers = new ArrayList<>(newUsers);
-        this.filteredUsers = new ArrayList<>(newUsers);
-        diffResult.dispatchUpdatesTo(this);
-        Log.d("UserAdapter", "Updated users list. New size: " + this.filteredUsers.size());
     }
 
     @NonNull
@@ -51,13 +42,14 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
     public void onBindViewHolder(@NonNull UserViewHolder holder, int position) {
         User user = filteredUsers.get(position);
         holder.bind(user, clickListener);
-        Log.d("UserAdapter", "Binding user at position " + position + ": " + user.getName() + ", ID: " + user.getId());
     }
 
     @Override
     public int getItemCount() {
         return filteredUsers.size();
     }
+
+    @Override
     public Filter getFilter() {
         return new Filter() {
             @Override
@@ -68,12 +60,9 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
                 if (filterPattern.isEmpty()) {
                     filteredList = new ArrayList<>(allUsers);
                 } else {
-                    filteredList = new ArrayList<>();
-                    for (User user : allUsers) {
-                        if (user.getName().toLowerCase().contains(filterPattern)) {
-                            filteredList.add(user);
-                        }
-                    }
+                    filteredList = allUsers.stream()
+                            .filter(user -> user.getName().toLowerCase().contains(filterPattern))
+                            .collect(Collectors.toList());
                 }
 
                 FilterResults results = new FilterResults();
@@ -87,6 +76,12 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
                 notifyDataSetChanged();
             }
         };
+    }
+
+    public void updateUsers(List<User> newUsers) {
+        allUsers = new ArrayList<>(newUsers);
+        filteredUsers = new ArrayList<>(newUsers);
+        notifyDataSetChanged();
     }
 
     static class UserViewHolder extends RecyclerView.ViewHolder {
@@ -123,8 +118,6 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
                     clickListener.onUserClick(user);
                 }
             });
-
-            Log.d("UserViewHolder", "Bound user: " + user.getName() + ", ID: " + user.getId());
         }
     }
 
@@ -132,33 +125,4 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
         void onUserClick(User user);
     }
 
-    private static class UserDiffCallback extends DiffUtil.Callback {
-        private final List<User> oldUsers;
-        private final List<User> newUsers;
-
-        UserDiffCallback(List<User> oldUsers, List<User> newUsers) {
-            this.oldUsers = oldUsers;
-            this.newUsers = newUsers;
-        }
-
-        @Override
-        public int getOldListSize() {
-            return oldUsers.size();
-        }
-
-        @Override
-        public int getNewListSize() {
-            return newUsers.size();
-        }
-
-        @Override
-        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-            return oldUsers.get(oldItemPosition).getId().equals(newUsers.get(newItemPosition).getId());
-        }
-
-        @Override
-        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-            return oldUsers.get(oldItemPosition).equals(newUsers.get(newItemPosition));
-        }
-    }
 }

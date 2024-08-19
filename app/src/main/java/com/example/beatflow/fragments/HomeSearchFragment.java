@@ -16,7 +16,10 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import com.example.beatflow.FilterableUserAdapter;
+import com.example.beatflow.MainActivity;
 import com.example.beatflow.R;
 import com.example.beatflow.UserAdapter;
 import com.example.beatflow.Data.User;
@@ -30,6 +33,7 @@ import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class HomeSearchFragment extends Fragment {
 
@@ -39,6 +43,8 @@ public class HomeSearchFragment extends Fragment {
     private List<User> allUsers = new ArrayList<>();
     private Handler searchHandler = new Handler();
     private static final long SEARCH_DELAY_MS = 300;
+    private SwipeRefreshLayout swipeRefreshLayout;
+
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -46,7 +52,10 @@ public class HomeSearchFragment extends Fragment {
         return binding.getRoot();
     }
 
+
+
     @Override
+
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
@@ -56,12 +65,7 @@ public class HomeSearchFragment extends Fragment {
         setupRecyclerView();
         setupSearchView();
         loadAllUsers();
-
-        binding.recyclerViewUsers.setAdapter(userAdapter);
-        binding.recyclerViewUsers.setVisibility(View.VISIBLE);
-        Log.d("HomeSearchFragment", "RecyclerView visibility set to VISIBLE");
-
-        updateEmptyView(true);
+        setupSwipeRefresh();
     }
 
     private void setupRecyclerView() {
@@ -71,8 +75,14 @@ public class HomeSearchFragment extends Fragment {
 
         int spacingInPixels = getResources().getDimensionPixelSize(R.dimen.item_spacing);
         binding.recyclerViewUsers.addItemDecoration(new SpacingItemDecoration(spacingInPixels));
-
-        Log.d("HomeSearchFragment", " RecyclerView ");
+    }
+    private void setupSwipeRefresh() {
+        swipeRefreshLayout = binding.swipeRefreshLayout;
+        swipeRefreshLayout.setOnRefreshListener(this::refreshData);
+        swipeRefreshLayout.setColorSchemeResources(R.color.primary_purple, R.color.dark_purple, R.color.light_purple);
+    }
+    private void refreshData() {
+        loadAllUsers();
     }
 
 
@@ -86,41 +96,50 @@ public class HomeSearchFragment extends Fragment {
 
             @Override
             public void afterTextChanged(Editable s) {
-                searchHandler.removeCallbacksAndMessages(null);
-                searchHandler.postDelayed(() -> performSearch(s.toString()), SEARCH_DELAY_MS);
+                userAdapter.getFilter().filter(s);
             }
         });
     }
     private void loadAllUsers() {
+        showLoading(true);
         databaseRef.child("users").addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                allUsers.clear();
+                List<User> users = new ArrayList<>();
                 for (DataSnapshot userSnapshot : dataSnapshot.getChildren()) {
                     User user = userSnapshot.getValue(User.class);
                     if (user != null) {
                         user.setId(userSnapshot.getKey());
-                        allUsers.add(user);
+                        users.add(user);
                     }
                 }
-                updateSearchResults(allUsers);
+                updateSearchResults(users);
+                showLoading(false);
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError databaseError) {
-                Log.e("HomeSearchFragment", "Error loading users: " + databaseError.getMessage());
+                showLoading(false);
+                showErrorMessage("Failed to load users. Please try again.");
             }
         });
     }
+    private void showErrorMessage(String message) {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).showMessage(message);
+        }
+    }
 
     private void performSearch(String query) {
-        List<User> filteredUsers = new ArrayList<>();
-        for (User user : allUsers) {
-            if (user.getName().toLowerCase().contains(query.toLowerCase())) {
-                filteredUsers.add(user);
-            }
+        String lowercaseQuery = query.toLowerCase();
+        if (lowercaseQuery.isEmpty()) {
+            updateSearchResults(allUsers);
+        } else {
+            List<User> filteredUsers = allUsers.stream()
+                    .filter(user -> user.getName().toLowerCase().contains(lowercaseQuery))
+                    .collect(Collectors.toList());
+            updateSearchResults(filteredUsers);
         }
-        updateSearchResults(filteredUsers);
     }
 
     private void searchUsers(String query) {
@@ -153,11 +172,9 @@ public class HomeSearchFragment extends Fragment {
 
     private void updateSearchResults(List<User> users) {
         userAdapter.updateUsers(users);
-        binding.progressBarLoading.setVisibility(View.GONE);
+        binding.searchResultsCount.setText(getString(R.string.search_results_count, users.size()));
+        binding.searchResultsCount.setVisibility(View.VISIBLE);
         updateEmptyView(users.isEmpty());
-        Log.d("HomeSearchFragment", "   " + users.size() + " ");
-
-        binding.recyclerViewUsers.setVisibility(View.VISIBLE);
     }
 
     private void clearSearchResults() {
@@ -167,13 +184,18 @@ public class HomeSearchFragment extends Fragment {
     private void updateEmptyView(boolean isEmpty) {
         binding.textViewNoResults.setVisibility(isEmpty ? View.VISIBLE : View.GONE);
         binding.recyclerViewUsers.setVisibility(isEmpty ? View.GONE : View.VISIBLE);
-        Log.d("HomeSearchFragment", "Updating empty view. isEmpty: " + isEmpty);
     }
 
     private void onUserClick(User user) {
         if (user.getId() != null && !user.getId().isEmpty()) {
             UserProfileFragment userProfileFragment = UserProfileFragment.newInstance(user.getId());
             requireActivity().getSupportFragmentManager().beginTransaction()
+                    .setCustomAnimations(
+                            R.anim.slide_in,
+                            R.anim.slide_out,
+                            R.anim.slide_in_left,
+                            R.anim.slide_out_right
+                    )
                     .replace(R.id.fragment_container, userProfileFragment)
                     .addToBackStack(null)
                     .commit();
